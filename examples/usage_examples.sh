@@ -89,6 +89,13 @@ echo "    $SCRIPT -v"
 echo "    $SCRIPT --verbose --device emulator-5554 -d"
 echo ""
 
+echo "13. New defensive workflow modules"
+echo "    $SCRIPT inventory"
+echo "    $SCRIPT security"
+echo "    $SCRIPT apps"
+echo "    $SCRIPT report"
+echo ""
+
 echo "==== ACTUAL COMMAND EXAMPLES ===="
 echo ""
 echo "Uncomment one command below to run it:"
@@ -104,6 +111,10 @@ echo ""
 # $SCRIPT --device emulator-5554 --user 0 -U com.example.app
 # $SCRIPT --device emulator-5554 --user 0 -R app.apk com.example.app
 # $SCRIPT --device emulator-5554 logs capture --package com.example.app -o ./logs --duration 60
+# $SCRIPT --device emulator-5554 inventory
+# $SCRIPT --device emulator-5554 security
+# $SCRIPT --device emulator-5554 apps
+# $SCRIPT --device emulator-5554 report
 
 echo "To run actual commands, uncomment them in this script and execute:"
 echo "bash examples/usage_examples.sh"

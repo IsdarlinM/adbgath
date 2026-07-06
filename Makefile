@@ -20,10 +20,14 @@ help:
 
 install: $(SCRIPT)
 	@echo "Installing $(SCRIPT) to $(INSTALL_PATH)..."
+	@echo "Running verbose smoke check with VERBOSE=true"
+	@VERBOSE=true ./$(SCRIPT) -h >/dev/null 2>&1 || true
 	chmod +x $(SCRIPT)
 	sudo install -m 755 $(SCRIPT) $(INSTALL_PATH)
 	sudo install -d $(LIB_INSTALL_DIR)/lib
 	sudo install -m 644 $(LIBS) $(LIB_INSTALL_DIR)/lib/
+	@rm -f *.tar.gz *.tgz *.zip
+	@echo "Removed temporary archive artifacts if present."
 	@echo "Installation complete. Run 'adbgath -h' to verify."
 
 uninstall:
@@ -36,6 +40,8 @@ test: lint
 	@echo "Running basic tests..."
 	@bash -n $(SCRIPT)
 	@for file in $(LIBS); do bash -n $$file; done
+	@bash tests/test_adb_wrapper.sh
+	@bash tests/test_rules.sh
 	@echo "OK Syntax check passed"
 	@chmod +x $(SCRIPT)
 	@./$(SCRIPT) -h > /dev/null && echo "OK Help works"

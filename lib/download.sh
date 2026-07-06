@@ -6,6 +6,34 @@
 
 [[ -z "${ADB_SOURCED:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/adb.sh"
 
+resolve_remote_apk_target() {
+    local target=$1
+    local user_id=${2:-}
+
+    if [[ "$target" =~ ^/ ]]; then
+        echo "$target"
+        return 0
+    fi
+
+    if [[ "$target" =~ ^[A-Za-z0-9_.]+([.][A-Za-z0-9_.]+)+$ ]]; then
+        local resolved_path
+        resolved_path=$(adb_get_package_path "$target" "$user_id" 2>/dev/null | sed '/^$/d' | head -n 1 || true)
+        if [ -n "$resolved_path" ]; then
+            echo "$resolved_path"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+prepare_download_directory() {
+    local output_root=${1:-.}
+    local download_root
+    download_root=$(output_subdir "$(output_root_dir "$output_root")" "apks")
+    echo "$download_root"
+}
+
 download_output_path() {
     local apk_path=$1
     local output_dir=$2
@@ -51,14 +79,17 @@ download_with_pv() {
 download_single_apk() {
     local apk_path=$1
     local output_dir=${2:-.}
+    local remote_apk_path
 
-    if [[ ! "$apk_path" =~ ^/ ]]; then
-        warning "Skipping invalid APK path: $apk_path"
+    remote_apk_path=$(resolve_remote_apk_target "$apk_path" "${USER_ID:-}" 2>/dev/null || true)
+
+    if [ -z "$remote_apk_path" ]; then
+        warning "Skipping invalid APK path or package: $apk_path"
         return 1
     fi
 
-    if ! adb_file_exists "$apk_path"; then
-        warning "File not found on device: $apk_path"
+    if ! adb_file_exists "$remote_apk_path"; then
+        warning "File not found on device: $remote_apk_path"
         return 1
     fi
 
@@ -68,26 +99,26 @@ download_single_apk() {
     local output_file
     local size
 
-    apk_name=$(basename "$apk_path")
-    output_file=$(download_output_path "$apk_path" "$output_dir")
-    size=$(adb_file_size "$apk_path")
+    apk_name=$(basename "$remote_apk_path")
+    output_file=$(download_output_path "$remote_apk_path" "$output_dir")
+    size=$(adb_file_size "$remote_apk_path")
 
     info "Downloading ${CYAN}$apk_name${NC} ($(format_size "$size"))"
-    debug "Remote path: $apk_path"
+    debug "Remote path: $remote_apk_path"
     debug "Local path: $output_file"
 
-    if download_with_pv "$apk_path" "$output_file" "$apk_name" "$size"; then
+    if download_with_pv "$remote_apk_path" "$output_file" "$apk_name" "$size"; then
         success "Downloaded: ${CYAN}$(basename "$output_file")${NC} (${GREEN}$(download_file_size "$output_file")${NC})"
         return 0
     fi
 
-    if adb_pull "$apk_path" "$output_file"; then
+    if adb_pull "$remote_apk_path" "$output_file"; then
         success "Downloaded: ${CYAN}$(basename "$output_file")${NC} (${GREEN}$(download_file_size "$output_file")${NC})"
         return 0
     fi
 
     rm -f "$output_file"
-    warning "Error downloading: $apk_path"
+    warning "Error downloading: $remote_apk_path"
     return 1
 }
 
@@ -100,21 +131,23 @@ download_multiple() {
     local current=0
     local success_count=0
     local apk_path
+    local resolved_output_dir
 
     if [ "$total" -eq 0 ]; then
         error "No APK paths provided"
     fi
 
-    mkdir -p "$output_dir"
+    resolved_output_dir=$(prepare_download_directory "$output_dir")
+    mkdir -p "$resolved_output_dir"
 
-    info "Downloading ${CYAN}$total${NC} APK(s) to ${CYAN}$output_dir${NC}"
+    info "Downloading ${CYAN}$total${NC} APK(s) to ${CYAN}$resolved_output_dir${NC}"
     print_progress_header "Download Progress"
 
     for apk_path in "${apk_paths[@]}"; do
         ((current += 1))
-        show_progress_bar "$current" "$total" 36 "$(basename "$apk_path")"
+        show_progress_bar "$current" "$total" 30 "$(basename "$apk_path")"
 
-        if download_single_apk "$apk_path" "$output_dir"; then
+        if download_single_apk "$apk_path" "$resolved_output_dir"; then
             ((success_count += 1))
         fi
     done
@@ -170,6 +203,7 @@ download_apk() {
     fi
 }
 
+export -f resolve_remote_apk_target prepare_download_directory
 export -f download_output_path download_file_size download_with_pv
 export -f download_single_apk download_multiple download_from_file download_all_apks
 export -f download_apk

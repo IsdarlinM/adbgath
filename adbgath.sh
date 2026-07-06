@@ -65,6 +65,15 @@ source_required_lib "list.sh"
 source_required_lib "info.sh"
 source_required_lib "logs.sh"
 source_required_lib "sniff.sh"
+source_required_lib "config.sh"
+source_required_lib "discovery.sh"
+source_required_lib "inventory.sh"
+source_required_lib "apps_permissions.sh"
+source_required_lib "findings.sh"
+source_required_lib "reporting.sh"
+source_required_lib "rules.sh"
+source_required_lib "security.sh"
+source_required_lib "doctor.sh"
 source_optional_lib "app.sh"
 source_optional_lib "static.sh"
 source_optional_lib "runtime.sh"
@@ -125,7 +134,7 @@ run_interactive_mode() {
     local script_path="$SCRIPT_DIR/$SCRIPT_NAME"
     local line
 
-    show_logo
+    show_help
     echo
     echo "Interactive mode. Type help for usage, version for version, or exit to quit."
 
@@ -301,6 +310,8 @@ main() {
     SNIFF_INTERFACE="wlan0"
     SNIFF_DURATION=""
 
+    load_config "${ADBGATH_CONFIG:-${ADBGATH_CONFIG_FILE:-./config.sh}}"
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help|help)
@@ -455,6 +466,26 @@ main() {
                     list_type=$1
                     shift
                 fi
+                ;;
+            inventory)
+                action="inventory"
+                shift
+                ;;
+            security)
+                action="security"
+                shift
+                ;;
+            apps)
+                action="apps"
+                shift
+                ;;
+            report)
+                action="report"
+                shift
+                ;;
+            doctor)
+                action="doctor"
+                shift
                 ;;
             -i|--info|info)
                 action="info"
@@ -652,6 +683,21 @@ main() {
             ;;
         info)
             run_info_command "$info_type"
+            ;;
+        inventory)
+            inventory_basic "$DEVICE_ID" "$output_target"
+            ;;
+        security)
+            security_run_checks "$DEVICE_ID" "$output_target"
+            ;;
+        apps)
+            apps_list_packages "$DEVICE_ID"
+            ;;
+        report)
+            report_write_markdown "$output_target/report.md" "ADB Audit Report" "Report generation is enabled."
+            ;;
+        doctor)
+            doctor_check "$output_target"
             ;;
         collect)
             collect_device_info "$output_target"

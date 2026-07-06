@@ -36,11 +36,53 @@ debug() {
     fi
 }
 
+terminal_width() {
+    local cols="${COLUMNS:-}"
+    if [ -z "$cols" ]; then
+        cols=$(tput cols 2>/dev/null || true)
+    fi
+    if [[ "$cols" =~ ^[0-9]+$ ]] && [ "$cols" -gt 0 ]; then
+        echo "$cols"
+    else
+        echo 80
+    fi
+}
+
+output_root_dir() {
+    local requested=${1:-.}
+    local root="$requested"
+
+    if [ -z "$root" ] || [ "$root" = "." ]; then
+        root="./adbgath-output"
+    fi
+
+    mkdir -p "$root"
+    echo "$root"
+}
+
+output_subdir() {
+    local root=$1
+    local subdir=$2
+    local target="$root/$subdir"
+
+    mkdir -p "$target"
+    echo "$target"
+}
+
 print_header() {
     local title=$1
-    echo -e "${BLUE}+-------------------------------------------------------------------+${NC}"
-    printf "${BLUE}|${NC} ${CYAN}%-65s${NC} ${BLUE}|${NC}\n" "$title"
-    echo -e "${BLUE}+-------------------------------------------------------------------+${NC}"
+    local width
+    width=$(terminal_width)
+    if (( width < 70 )); then
+        width=70
+    fi
+
+    local border
+    border=$(printf "%*s" "$width" '' | tr ' ' '-')
+
+    echo -e "${BLUE}+${border}+${NC}"
+    printf "${BLUE}|${NC} ${CYAN}%-*s${NC} ${BLUE}|${NC}\n" "$((width - 2))" "$title"
+    echo -e "${BLUE}+${border}+${NC}"
 }
 
 print_section() {
@@ -50,7 +92,7 @@ print_section() {
 
 print_subsection() {
     local title=$1
-    echo -e "${MAGENTA}+-- $title${NC}"
+    echo -e "${MAGENTA}+-- ${title}${NC}"
 }
 
 print_separator() {
@@ -59,7 +101,17 @@ print_separator() {
 
 print_progress_header() {
     local title=$1
-    echo -e "${BLUE}+-- ${title} --------------------------------------------------+${NC}"
+    local width
+    width=$(terminal_width)
+    local padding=$((width - ${#title} - 8))
+
+    if (( padding < 2 )); then
+        padding=2
+    fi
+
+    printf "${BLUE}+-- %s" "$title"
+    printf "%*s" "$padding" ''
+    printf " --+${NC}\n"
 }
 
 print_progress_footer() {
@@ -69,7 +121,7 @@ print_progress_footer() {
 show_progress_bar() {
     local current=$1
     local total=$2
-    local width=${3:-36}
+    local width=${3:-30}
     local label=${4:-}
 
     if [ "$total" -le 0 ]; then
@@ -134,7 +186,22 @@ table_row() {
 display_kv() {
     local label=$1
     local value=$2
-    printf "  ${CYAN}%-30s${NC} : ${GREEN}%s${NC}\n" "$label" "$value"
+    local width
+    width=$(terminal_width)
+    local label_width=24
+
+    if (( width > 100 )); then
+        label_width=28
+    elif (( width < 80 )); then
+        label_width=18
+    fi
+
+    local value_width=$((width - label_width - 8))
+    if (( ${#value} > value_width )); then
+        value="${value:0:$((value_width - 3))}..."
+    fi
+
+    printf "  ${CYAN}%-${label_width}s${NC} : ${GREEN}%s${NC}\n" "$label" "$value"
 }
 
 read_list_file() {
@@ -143,6 +210,7 @@ read_list_file() {
 }
 
 export -f error warning info success debug
+export -f terminal_width output_root_dir output_subdir
 export -f print_header print_section print_subsection print_separator
 export -f print_progress_header print_progress_footer show_progress_bar
 export -f command_exists var_set trim format_size table_row display_kv read_list_file

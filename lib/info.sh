@@ -95,6 +95,8 @@ show_device_security_info() {
     print_section "Security Information"
     display_kv "Rooted" "$(device_is_rooted)"
     display_kv "SELinux Status" "$(device_get_selinux_status)"
+    display_kv "Current UID" "$(adb_shell id -u | tr -d '\r' || echo 'N/A')"
+    display_kv "Shell Context" "$(adb_shell id | tr -d '\r' || echo 'N/A')"
     print_separator
 }
 

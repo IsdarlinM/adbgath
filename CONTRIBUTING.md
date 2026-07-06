@@ -25,6 +25,7 @@ Be respectful and inclusive. Treat all contributors with courtesy and profession
 git clone https://github.com/IsdarlinM/adbgath.git
 cd adbgath
 chmod +x adbgath.sh
+make install
 ```
 
 ### Testing Changes

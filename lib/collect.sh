@@ -53,12 +53,14 @@ collect_device_info() {
     local base_dir=${1:-.}
     local device_name
     local collection_dir
+    local collection_root
     local tasks=()
 
-    mkdir -p "$base_dir"
+    collection_root=$(output_subdir "$(output_root_dir "$base_dir")" "collections")
+    mkdir -p "$collection_root"
 
     device_name=$(collect_safe_name "$(adb_get_serial)")
-    collection_dir="$base_dir/adbgath_${device_name}_$(collect_timestamp)"
+    collection_dir="$collection_root/adbgath_${device_name}_$(collect_timestamp)"
     mkdir -p "$collection_dir"
 
     info "Collecting device information into ${CYAN}$collection_dir${NC}"

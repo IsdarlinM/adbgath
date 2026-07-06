@@ -37,6 +37,13 @@ export OUTPUT_DIR="."
 # Download to specific directory
 # export OUTPUT_DIR="/home/user/android_backups"
 
+# New defensive audit settings
+# export ADBGATH_OUTPUT_DIR="./adbgath-output"
+# export ADBGATH_TIMEOUT="10"
+# export ADBGATH_REDACT="true"
+# export ADBGATH_NO_SENSITIVE="false"
+# export ADBGATH_PARALLEL="1"
+
 # For WSL (Windows Subsystem for Linux)
 # export ADB_PATH="/mnt/c/Android/platform-tools/adb"
 
