@@ -1,5 +1,17 @@
 # adbgath
 
+```
+    █████╗ ██████╗ ██████╗        ██████╗  █████╗ ████████╗██╗  ██╗███████╗██████╗ ███████╗██████╗ 
+    ██╔══██╗██╔══██╗██╔══██╗      ██╔════╝ ██╔══██╗╚══██╔══╝██║  ██║██╔════╝██╔══██╗██╔════╝██╔══██╗
+    ███████║██║  ██║██████╔╝█████╗██║  ███╗███████║   ██║   ███████║█████╗  ██████╔╝█████╗  ██████╔╝
+    ██╔══██║██║  ██║██╔══██╗╚════╝██║   ██║██╔══██║   ██║   ██╔══██║██╔══╝  ██╔══██╗██╔══╝  ██╔══██╗
+    ██║  ██║██████╔╝██████╔╝      ╚██████╔╝██║  ██║   ██║   ██║  ██║███████╗██║  ██║███████╗██║  ██║
+    ╚═╝  ╚═╝╚═════╝ ╚═════╝        ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+
+            ADB-Gath
+        Defensive ADB Toolkit
+```
+
 adbgath extracts, downloads, installs, uninstalls, and replaces APKs, collects device information, monitors logs, and captures rooted network traffic through ADB.
 
 The script supports USB Debugging and Wireless Debugging. Running it with no arguments opens interactive mode. Read-only commands auto-select a device only when exactly one device is connected. App-changing commands require an explicit device and Android user/profile.
@@ -14,6 +26,7 @@ The script supports USB Debugging and Wireless Debugging. Running it with no arg
 - Listen to live `logcat` output or capture logs to files with package/PID/regex filters.
 - Capture rooted network traffic to `.pcap` files with on-device `tcpdump`.
 - Connect to wireless debugging targets with `--connect`.
+- New modular defensive workflow: inventory, security posture, app/permission inspection, and JSON/Markdown reporting.
 
 ## Requirements
 
