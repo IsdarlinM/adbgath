@@ -1,0 +1,7 @@
+include LICENSE README.md CHANGELOG.md CONTRIBUTING.md Makefile adbgath.sh
+recursive-include docs *.md
+recursive-include examples *.txt
+recursive-include installers *.cmd *.ps1 *.sh
+recursive-include src/adbgath/web/static *.html *.css *.js
+recursive-include tests *.py
+recursive-include .github *.yml

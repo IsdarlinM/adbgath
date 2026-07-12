@@ -1,75 +1,36 @@
-.PHONY: help install uninstall test lint format clean version
+.PHONY: help install install-full uninstall test lint web clean version
 
-SCRIPT := adbgath.sh
-VERSION := 2.2.0
-INSTALL_PATH := /usr/local/bin/adbgath
-LIB_INSTALL_DIR := /usr/local/lib/adbgath
-LIBS := lib/utils.sh lib/adb.sh lib/device.sh lib/download.sh lib/install.sh lib/collect.sh lib/list.sh lib/info.sh lib/logs.sh lib/sniff.sh lib/help.sh
+PYTHON ?= python3
 
 help:
-	@echo "adbgath - Makefile"
-	@echo ""
-	@echo "Available targets:"
-	@echo "  make install    - Install script to $(INSTALL_PATH)"
-	@echo "  make uninstall  - Remove installed script"
-	@echo "  make test       - Run syntax and smoke tests"
-	@echo "  make lint       - Check scripts with shellcheck"
-	@echo "  make format     - Format scripts with shfmt"
-	@echo "  make clean      - Remove temporary files"
-	@echo "  make version    - Show version"
+	@echo "adbgath development targets"
+	@echo "  make install       Install editable package"
+	@echo "  make install-full  Install with Frida tooling"
+	@echo "  make test          Run the automated test suite"
+	@echo "  make lint          Run Ruff and compile checks"
+	@echo "  make web           Start the local web UI"
 
-install: $(SCRIPT)
-	@echo "Installing $(SCRIPT) to $(INSTALL_PATH)..."
-	@echo "Running verbose smoke check with VERBOSE=true"
-	@VERBOSE=true ./$(SCRIPT) -h >/dev/null 2>&1 || true
-	chmod +x $(SCRIPT)
-	sudo install -m 755 $(SCRIPT) $(INSTALL_PATH)
-	sudo install -d $(LIB_INSTALL_DIR)/lib
-	sudo install -m 644 $(LIBS) $(LIB_INSTALL_DIR)/lib/
-	@rm -f *.tar.gz *.tgz *.zip
-	@echo "Removed temporary archive artifacts if present."
-	@echo "Installation complete. Run 'adbgath -h' to verify."
+install:
+	$(PYTHON) -m pip install -e .
+
+install-full:
+	$(PYTHON) -m pip install -e '.[full,dev]'
 
 uninstall:
-	@echo "Removing $(INSTALL_PATH)..."
-	sudo rm -f $(INSTALL_PATH)
-	sudo rm -rf $(LIB_INSTALL_DIR)
-	@echo "Uninstall complete."
+	$(PYTHON) -m pip uninstall -y adbgath
 
-test: lint
-	@echo "Running basic tests..."
-	@bash -n $(SCRIPT)
-	@for file in $(LIBS); do bash -n $$file; done
-	@bash tests/test_adb_wrapper.sh
-	@bash tests/test_rules.sh
-	@echo "OK Syntax check passed"
-	@chmod +x $(SCRIPT)
-	@./$(SCRIPT) -h > /dev/null && echo "OK Help works"
-	@./$(SCRIPT) -v > /dev/null && echo "OK Version works"
-	@echo "OK All tests passed"
+test:
+	$(PYTHON) -m pytest
 
 lint:
-	@echo "Linting with shellcheck..."
-	@if command -v shellcheck > /dev/null; then \
-		shellcheck $(SCRIPT) $(LIBS) && echo "OK No shellcheck errors"; \
-	else \
-		echo "WARNING shellcheck not installed. Install with: apt-get install shellcheck"; \
-	fi
+	$(PYTHON) -m ruff check src tests
+	$(PYTHON) -m compileall -q src
 
-format:
-	@echo "Formatting with shfmt..."
-	@if command -v shfmt > /dev/null; then \
-		shfmt -i 4 -w $(SCRIPT) $(LIBS) && echo "OK Formatted"; \
-	else \
-		echo "WARNING shfmt not installed. Install with: apt-get install shfmt"; \
-	fi
+web:
+	$(PYTHON) -m adbgath.cli web
 
 clean:
-	@echo "Cleaning up..."
-	@rm -f *.log *.tmp
-	@echo "OK Clean complete"
+	rm -rf .pytest_cache .ruff_cache .coverage htmlcov build dist *.egg-info src/*.egg-info
 
 version:
-	@echo "$(SCRIPT) v$(VERSION)"
-
-.DEFAULT_GOAL := help
+	@$(PYTHON) -c 'from adbgath import __version__; print(__version__)'

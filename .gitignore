@@ -1,41 +1,24 @@
-# Downloaded APK files
-*.apk
-
-# Temporary files
-*.tmp
-*.bak
-*.swp
-*.swo
-*~
-
-# Editor files
-.vscode/
-.idea/
-*.sublime-*
-.DS_Store
-
-# OS files
-Thumbs.db
-.thumbs.db
-
-# Log files
-*.log
-
-# Lists/temporary downloads
-apk_list.txt
-*.list
-
-# Environment files
-.env
-.env.local
-
-# Node modules (if using any build tools)
-node_modules/
-
-# Python
 __pycache__/
 *.py[cod]
-
-# Test outputs
-test_results/
-coverage/
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.env
+*.log
+*.pcap
+*.apk
+*.apks
+*.tar
+*.zip
+adbgath-workspace/
+reports/
+collections/
+captures/
+logs/
+uploads/

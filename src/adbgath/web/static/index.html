@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>adbgath // Android Security Workspace</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><span>&gt;_</span></div>
+        <div><strong>ADB<span>GATH</span></strong><small>DEFENSIVE MOBILE LAB</small></div>
+      </div>
+      <nav id="nav">
+        <button class="nav-item active" data-view="overview"><span>◈</span>Overview</button>
+        <button class="nav-item" data-view="operations"><span>⌘</span>Operations</button>
+        <button class="nav-item" data-view="packages"><span>▦</span>Apps & APKs</button>
+        <button class="nav-item" data-view="logs"><span>≋</span>Live Logcat</button>
+        <button class="nav-item" data-view="security"><span>⬡</span>Security Audit</button>
+        <button class="nav-item" data-view="artifacts"><span>◫</span>Artifacts</button>
+      </nav>
+      <div class="side-foot">
+        <div class="status-dot"></div>
+        <div><span id="engineStatus">INITIALIZING</span><small>LOCAL ENGINE</small></div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AUTHORIZED ANDROID ASSESSMENT</p>
+          <h1 id="pageTitle">Operations overview</h1>
+        </div>
+        <div class="top-actions">
+          <div class="device-control">
+            <label for="deviceSelect">TARGET DEVICE</label>
+            <select id="deviceSelect"><option value="">Auto-select</option></select>
+          </div>
+          <div class="device-control compact">
+            <label for="userInput">PROFILE</label>
+            <input id="userInput" value="current" placeholder="current">
+          </div>
+          <button id="refreshDevices" class="icon-button" title="Refresh devices">↻</button>
+        </div>
+      </header>
+
+      <section id="view-overview" class="view active">
+        <div class="metric-grid">
+          <article class="metric"><span>CONNECTED TARGETS</span><strong id="deviceCount">0</strong><small id="deviceHint">Waiting for ADB</small></article>
+          <article class="metric"><span>ENGINE HEALTH</span><strong id="healthValue">--</strong><small id="healthHint">Running diagnostics</small></article>
+          <article class="metric"><span>WORKSPACE</span><strong id="artifactCount">0</strong><small>Generated artifacts</small></article>
+          <article class="metric accent"><span>VERSION</span><strong id="versionValue">3.0.0</strong><small>Cross-platform core</small></article>
+        </div>
+        <div class="dashboard-grid">
+          <article class="panel hero-panel">
+            <div class="panel-head"><div><span class="tag">MISSION CONTROL</span><h2>Android evidence, without platform lock-in.</h2></div></div>
+            <p>Run the same validated operations from Windows, Linux, the CLI, or this local browser workspace. No arbitrary shell endpoint is exposed.</p>
+            <div class="hero-actions">
+              <button class="primary quick-action" data-action="inventory">Build inventory</button>
+              <button class="secondary quick-action" data-action="security">Run posture audit</button>
+              <button class="secondary" data-switch="operations">Open command center</button>
+            </div>
+            <div class="signal-map" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="phone">ADB</span></div>
+          </article>
+          <article class="panel activity-panel">
+            <div class="panel-head"><div><span class="tag">SYSTEM</span><h3>Environment status</h3></div><button id="runDoctor" class="text-button">RUN DOCTOR</button></div>
+            <div id="doctorChecks" class="check-list"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+          </article>
+        </div>
+        <article class="panel console-panel">
+          <div class="panel-head"><div><span class="tag">ACTIVITY STREAM</span><h3>Execution output</h3></div><button class="text-button clear-output">CLEAR</button></div>
+          <pre class="console" data-console>adbgath web engine is starting…</pre>
+        </article>
+      </section>
+
+      <section id="view-operations" class="view">
+        <div class="split-layout">
+          <article class="panel command-builder">
+            <div class="panel-head"><div><span class="tag">ALLOWLISTED OPERATIONS</span><h2>Command center</h2></div></div>
+            <label class="field-label">CAPABILITY</label>
+            <select id="actionSelect" class="large-select"></select>
+            <div id="dynamicFields" class="form-grid"></div>
+            <div id="dangerConfirm" class="danger-confirm hidden">
+              <div><strong>Explicit authorization required</strong><span>This action changes device state. Confirm that the selected device is in scope.</span></div>
+              <label><input type="checkbox" id="authorizedCheck"> Authorized target</label>
+            </div>
+            <div class="execute-row">
+              <button id="executeAction" class="primary">Execute operation</button>
+              <button id="resetForm" class="secondary">Reset</button>
+            </div>
+          </article>
+          <article class="panel console-panel tall">
+            <div class="panel-head"><div><span class="tag">RESULT</span><h3>Structured output</h3></div><button class="text-button clear-output">CLEAR</button></div>
+            <pre class="console" data-console>Select an operation and execute it.</pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-packages" class="view">
+        <div class="dashboard-grid">
+          <article class="panel">
+            <div class="panel-head"><div><span class="tag">PACKAGE INVENTORY</span><h2>Installed applications</h2></div><button id="loadPackages" class="primary compact-btn">LOAD</button></div>
+            <div class="filter-row"><input id="packageSearch" placeholder="Filter packages…"><label><input type="checkbox" id="includePaths"> Include APK paths</label></div>
+            <div id="packageList" class="package-list empty-state">Select a device and load packages.</div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><span class="tag">FILE STAGING</span><h3>Upload APK or tool</h3></div></div>
+            <label class="dropzone" id="dropzone"><input id="fileUpload" type="file"><span>Drop a file here or click to browse</span><small>Maximum 512 MiB. Files stay in the local workspace.</small></label>
+            <div id="uploadResult" class="upload-result"></div>
+            <div class="quick-grid">
+              <button class="module-card quick-action" data-action="download"><strong>Pull APKs</strong><span>Download selected packages or paths.</span></button>
+              <button class="module-card" data-switch="operations" data-preset="install"><strong>Install APK</strong><span>Install staged files for a selected user.</span></button>
+              <button class="module-card" data-switch="operations" data-preset="static"><strong>Static check</strong><span>Hash and inspect local APK metadata.</span></button>
+              <button class="module-card" data-switch="operations" data-preset="app"><strong>App summary</strong><span>Inspect paths and permission state.</span></button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-logs" class="view">
+        <article class="panel live-panel">
+          <div class="panel-head"><div><span class="tag live">LIVE</span><h2>Logcat stream</h2></div><div class="stream-actions"><button id="startLogs" class="primary">Start stream</button><button id="stopLogs" class="secondary" disabled>Stop</button><button id="clearLogs" class="text-button">Clear buffer</button></div></div>
+          <div class="form-grid log-controls">
+            <label><span>Package filter</span><input id="logPackage" placeholder="com.example.app"></label>
+            <label><span>Regex filter</span><input id="logRegex" placeholder="token|password|exception"></label>
+            <label><span>Format</span><select id="logFormat"><option>threadtime</option><option>brief</option><option>time</option><option>process</option></select></label>
+          </div>
+          <pre id="liveConsole" class="console live-console">Live output will appear here.</pre>
+        </article>
+      </section>
+
+      <section id="view-security" class="view">
+        <div class="security-hero">
+          <div><span class="tag">DEVICE POSTURE</span><h2>Evidence-driven mobile security review</h2><p>Collects Android properties, SELinux state, Verified Boot indicators, encryption state, proxy configuration, package inventory, and runtime evidence.</p></div>
+          <div class="security-actions"><button id="runSecurity" class="primary">Run audit</button><button id="runMastg" class="secondary">Build MASTG bundle</button></div>
+        </div>
+        <div id="findingSummary" class="metric-grid compact-metrics"></div>
+        <article class="panel"><div class="panel-head"><div><span class="tag">FINDINGS</span><h3>Audit results</h3></div></div><div id="findings" class="finding-list empty-state">Run an audit to populate findings.</div></article>
+      </section>
+
+      <section id="view-artifacts" class="view">
+        <article class="panel"><div class="panel-head"><div><span class="tag">LOCAL WORKSPACE</span><h2>Generated artifacts</h2></div></div><p class="muted">Artifacts appear in execution results and can be opened from the local workspace. The web server prevents downloads outside this directory.</p><div id="artifactList" class="artifact-list empty-state">No artifacts generated in this session.</div></article>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

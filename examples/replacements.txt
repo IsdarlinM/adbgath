@@ -1,0 +1,2 @@
+# APK_FILE PACKAGE_NAME
+"C:/authorized lab/apks/replacement.apk" com.example.first
