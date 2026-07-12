@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -12,15 +11,16 @@ from adbgath.webapp import serve
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_web_frontend_and_backend_action_parity():
+def test_web_frontend_uses_server_operation_catalog():
     javascript = (PROJECT_ROOT / "src/adbgath/web/static/app.js").read_text(encoding="utf-8")
-    action_block = javascript.split("const ACTIONS = {", 1)[1].split("\n};", 1)[0]
-    frontend_actions = set(re.findall(r"^  ([a-z_]+): \{", action_block, flags=re.MULTILINE))
-    assert frontend_actions == set(WEB_ACTIONS)
+    assert "installOperationCatalog(data.operations || [])" in javascript
+    assert "state.operations = new Map" in javascript
+    assert "const ACTIONS = {" not in javascript
+    assert WEB_ACTIONS
 
 
-def test_web_server_rejects_non_loopback_binding():
-    with pytest.raises(AdbgathError, match="loopback"):
+def test_web_server_rejects_unauthenticated_non_loopback_binding():
+    with pytest.raises(AdbgathError, match="remote-token"):
         serve(host="192.0.2.1", open_browser=False)
 
 

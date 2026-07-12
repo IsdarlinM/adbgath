@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adbgath"
-version = "3.0.0"
+version = "3.2.9"
 description = "Cross-platform defensive Android/ADB assessment toolkit with CLI and local web UI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,6 +25,7 @@ dependencies = [
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.34,<1.0",
   "python-multipart>=0.0.20,<1.0",
+  "reportlab>=4.2,<5",
 ]
 
 [project.optional-dependencies]
@@ -55,7 +56,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-adbgath = ["web/static/*"]
+adbgath = ["web/static/*", "frida/scripts/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -67,7 +68,7 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "SIM"]
-ignore = ["S603"]
+ignore = ["S603", "E501", "S104"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]

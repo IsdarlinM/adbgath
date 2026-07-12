@@ -1,0 +1,64 @@
+name: android-emulator-integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/android-emulator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install ADB-Gath
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Prepare Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-35;google_apis;x86_64"
+          echo no | "$AVDMANAGER" create avd --force --name adbgath-ci --package "system-images;android-35;google_apis;x86_64"
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+          nohup "$ANDROID_HOME/emulator/emulator" -avd adbgath-ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >"$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb wait-for-device
+          for _ in $(seq 1 120); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/emulator.log"
+          exit 1
+      - name: Run authorized read-only integration workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          serial="$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
+          test -n "$serial"
+          adbgath --json devices > "$RUNNER_TEMP/devices.json"
+          adbgath --device "$serial" --json capabilities > "$RUNNER_TEMP/capabilities.json"
+          adbgath --device "$serial" --json inventory --output "$RUNNER_TEMP/inventory.json"
+          adbgath --device "$serial" --json security --output "$RUNNER_TEMP/security"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          assert json.loads((root / "devices.json").read_text())
+          assert json.loads((root / "capabilities.json").read_text())["device_serial"]
+          assert (root / "inventory.json").is_file()
+          PY

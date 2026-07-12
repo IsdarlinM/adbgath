@@ -1,57 +1,70 @@
 # Web UI architecture
 
-The adbgath web interface is a local FastAPI application packaged with static HTML, CSS, and JavaScript. It is not a remote control panel and does not expose an arbitrary terminal.
+## Shared capability model
 
-## Shared capability layer
-
-Both interfaces call `AdbgathService`:
+The web UI does not maintain an independent list of commands. On startup it retrieves the operation catalog from the backend and builds forms from field definitions, choices, requirements, destructive flags, and long-running flags.
 
 ```text
-CLI ───────────────┐
-                   ├── AdbgathService ── AdbClient ── adb/adb.exe
-Local web API ─────┘
+Browser form ── operation catalog ── strict payload validation ── AdbgathService
 ```
 
-This prevents command drift between platforms and keeps validation, timeouts, error handling, artifact paths, and security checks consistent.
+This prevents CLI/Web drift.
 
-## Available web actions
+## Main workspaces
 
-- Device discovery, root-state probe, wireless connect, and disconnect.
-- Android user/profile discovery.
-- Package inventory and APK path resolution.
-- APK download, installation, uninstallation, and replacement.
-- Device information and app permission summary.
-- Runtime process/activity/service inspection.
-- Timed log capture and live WebSocket logcat streaming.
-- Network interface discovery, rooted packet capture, and tcpdump upload.
-- Global HTTP proxy and ADB forward/reverse mappings.
-- Debuggable app backup.
-- Content-provider enumeration.
-- Optional Frida process listing, attach, and spawn workflows.
-- Local APK hashing and metadata analysis.
-- Device posture audit, inventory, collection, and MASTG-oriented bundle.
-- Dependency diagnostics.
+- Overview and diagnostics.
+- Dynamic command center.
+- Package/APK workspace with sorting, pagination, and multi-file staging.
+- Live logcat with pause/resume, a bounded 5,000-line browser buffer, bookmarks, and local export.
+- Security assessment.
+- Projects and background jobs.
+- Findings and snapshots.
+- Artifact browser, project ZIP export, and downloads.
+- Local browser presets for operation forms; presets do not leave the operator browser.
+- Severity distribution visualization for structured findings.
 
-## Security controls
+## Jobs
 
-- Loopback-only binding; non-loopback hosts are rejected.
-- Same-site, HTTP-only local session cookie.
-- Trusted-host middleware.
-- Restrictive Content Security Policy and clickjacking protection.
-- Action allowlist in the backend dispatcher.
-- Literal `AUTHORIZED` confirmation for state-changing requests.
-- No arbitrary command or raw ADB endpoint.
-- Uploaded filenames are reduced to a basename.
-- Upload limit of 512 MiB.
-- Artifact downloads must resolve inside the configured workspace.
-- No cross-origin API configuration.
+Long-running actions can be queued. Job records contain:
 
-## Starting the UI
+- Action and normalized payload.
+- Queued/running/completed/failed/cancelling/cancelled status.
+- Progress.
+- Timestamps.
+- Result or sanitized failure state.
+
+Cancellation is cooperative: it prevents queued work and marks active work as cancelling. A platform command already running may continue until its bounded timeout or next cancellation boundary.
+
+## Local mode
 
 ```bash
 adbgath web
-adbgath web --port 9000
-adbgath web --no-browser
 ```
 
-The application intentionally avoids CDN assets so it remains usable in restricted lab environments and does not leak target context to third parties.
+Local mode binds to loopback by default and issues a random same-site HTTP-only cookie.
+
+## Authenticated remote mode
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token "LONG_RANDOM_TOKEN" \
+  --tls-cert server.crt \
+  --tls-key server.key
+```
+
+All three remote requirements are mandatory. This mode is intended for an operator-controlled network, not public Internet exposure or untrusted multi-user hosting.
+
+## WebSocket logcat
+
+The log stream validates the session cookie and request Origin before opening. Package, regex, device, and format inputs pass through service validation.
+
+## Uploads and artifacts
+
+Uploads use basename normalization, collision-safe destination names, streaming size enforcement, and SHA-256 output. Downloads are resolved and confined to the configured workspace.
+
+## Browser state and large streams
+
+Operation presets are stored in `localStorage` under a versioned ADB-Gath key. They contain only catalogued form fields and are never treated as authorization for destructive actions. Destructive operations still require a fresh authorization confirmation.
+
+The live logcat console keeps at most 5,000 lines in browser memory. Pausing stops rendering, not collection; resuming displays the newest retained buffer. Bookmarks are local references and can be exported with the visible log data.

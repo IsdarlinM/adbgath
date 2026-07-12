@@ -9,15 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .branding import banner
 from .errors import AdbgathError
 from .service import AdbgathService
-
-BANNER = r"""
-╭──────────────────────────────────────────────────────────────────────────────╮
-│  ADB-GATH  ::  Defensive Android Assessment Toolkit  ::  v{version:<8}       │
-│  Cross-platform CLI + local security-focused web workspace                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-"""
 
 
 def _csv(value: str | None) -> list[str]:
@@ -99,6 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command")
 
     commands.add_parser("devices", help="List connected ADB devices and root status.")
+    commands.add_parser("capabilities", help="Detect host and selected-device capabilities.")
     connect = commands.add_parser("connect", help="Connect to a wireless ADB endpoint.")
     connect.add_argument("target", help="HOST:PORT")
     disconnect = commands.add_parser("disconnect", help="Disconnect a wireless ADB endpoint.")
@@ -123,15 +118,25 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--replace", action="store_true")
     install.add_argument("--grant-runtime-permissions", action="store_true")
 
+    install_set = commands.add_parser("install-set", help="Install an APK, split APK directory, or .apks archive.")
+    install_set.add_argument("source")
+    install_set.add_argument("--replace", action=argparse.BooleanOptionalAction, default=True)
+    install_set.add_argument("--grant-runtime-permissions", action="store_true")
+
     uninstall = commands.add_parser("uninstall", help="Uninstall one or more packages.")
     uninstall.add_argument("packages", nargs="*")
     uninstall.add_argument("--file", "-f", dest="input_file")
     uninstall.add_argument("--keep-data", action="store_true")
 
-    replace = commands.add_parser("replace", help="Uninstall a package, then install a replacement APK.")
+    replace = commands.add_parser("replace", help="Transactionally replace a package with backup and rollback.")
     replace.add_argument("package", nargs="?")
     replace.add_argument("apk", nargs="?")
     replace.add_argument("--file", "-f", dest="input_file")
+    replace.add_argument(
+        "--allow-uninstall",
+        action="store_true",
+        help="Permit uninstall/install fallback if in-place replacement fails.",
+    )
 
     info = commands.add_parser("info", help="Collect basic, system, network, or security information.")
     info.add_argument("mode", nargs="?", default="basic", choices=["basic", "system", "network", "security", "all"])
@@ -181,13 +186,100 @@ def build_parser() -> argparse.ArgumentParser:
     content.add_argument("--package")
 
     frida = commands.add_parser("frida", help="Use optional frida-tools against the selected device.")
-    frida.add_argument("mode", nargs="?", default="ps", choices=["ps", "attach", "spawn"])
+    frida.add_argument("mode", nargs="?", default="ps", choices=["ps", "attach", "spawn", "scripts", "history"])
     frida.add_argument("--package")
     frida.add_argument("--script")
+    frida.add_argument("--limit", type=int, default=100)
+    frida.add_argument("--no-redact", action="store_true")
 
-    static = commands.add_parser("static", help="Perform local APK metadata/hash analysis.")
+    static = commands.add_parser("static", help="Analyze APK, APKS, or AAB metadata and attack surface.")
     static.add_argument("apk")
     static.add_argument("--output", "-o")
+
+    bundle = commands.add_parser("bundle", help="Inspect/build/install/extract Android App Bundles with bundletool.")
+    bundle.add_argument("mode", choices=["inspect", "device-spec", "build-apks", "install-apks", "extract"])
+    bundle.add_argument("file", nargs="?")
+    bundle.add_argument("--output", "-o")
+
+    evidence = commands.add_parser(
+        "evidence", help="Capture screenshots, bugreport, dumpsys, logs, APKs, and a hashed manifest."
+    )
+    evidence.add_argument("--package")
+    evidence.add_argument("--output", "-o")
+    evidence.add_argument("--screen-record", type=int, default=0, metavar="SECONDS")
+    evidence.add_argument("--no-redact", action="store_true")
+
+    assess = commands.add_parser("assess", help="Run a reproducible authorized application assessment workflow.")
+    assess.add_argument("package")
+    assess.add_argument("--apk")
+    assess.add_argument("--project-id")
+    assess.add_argument("--output", "-o")
+
+    snapshot = commands.add_parser("snapshot", help="Create, list, or compare persistent state snapshots.")
+    snapshot_sub = snapshot.add_subparsers(dest="snapshot_mode", required=True)
+    snapshot_create = snapshot_sub.add_parser("create")
+    snapshot_create.add_argument("name")
+    snapshot_create.add_argument("--package")
+    snapshot_create.add_argument("--project-id")
+    snapshot_sub.add_parser("list").add_argument("--project-id")
+    snapshot_diff = snapshot_sub.add_parser("diff")
+    snapshot_diff.add_argument("before")
+    snapshot_diff.add_argument("after")
+    snapshot_diff.add_argument("--output", "-o")
+
+    project = commands.add_parser("project", help="Manage persistent assessment projects.")
+    project_sub = project.add_subparsers(dest="project_mode", required=True)
+    project_sub.add_parser("list")
+    project_create = project_sub.add_parser("create")
+    project_create.add_argument("name")
+    project_create.add_argument("--description", default="")
+    project_create.add_argument("--scope", default="")
+    project_sessions = project_sub.add_parser("sessions")
+    project_sessions.add_argument("--project-id")
+    project_export = project_sub.add_parser("export")
+    project_export.add_argument("project_id")
+    project_export.add_argument("--output", "-o")
+
+    findings = commands.add_parser("findings", help="List findings or update workflow status.")
+    findings.add_argument("--project-id")
+    findings.add_argument("--set-status", nargs=2, metavar=("FINDING_ID", "STATUS"))
+
+    group = commands.add_parser("group", help="Manage multi-device groups.")
+    group_sub = group.add_subparsers(dest="group_mode", required=True)
+    group_sub.add_parser("list")
+    group_add = group_sub.add_parser("add")
+    group_add.add_argument("name")
+    group_add.add_argument("serial")
+    group_remove = group_sub.add_parser("remove")
+    group_remove.add_argument("name")
+    group_remove.add_argument("serial")
+
+    run_group = commands.add_parser("run-group", help="Run a read-only operation concurrently on a device group.")
+    run_group.add_argument("group")
+    run_group.add_argument("operation", choices=["inventory", "info", "security", "capabilities"])
+
+    plugin = commands.add_parser("plugin", help="List or explicitly run installed ADB-Gath plugins.")
+    plugin_sub = plugin.add_subparsers(dest="plugin_mode", required=True)
+    plugin_sub.add_parser("list", help="List installed plugins and declared permissions.")
+    plugin_run = plugin_sub.add_parser("run", help="Run a plugin after explicit permission approval.")
+    plugin_run.add_argument("name")
+    plugin_run.add_argument("--package")
+    plugin_run.add_argument(
+        "--allow-permission",
+        action="append",
+        default=[],
+        choices=["read_device", "write_device", "network", "filesystem"],
+    )
+
+    report = commands.add_parser("report", help="Export project findings as HTML, Markdown, JSON, CSV, SARIF, or PDF.")
+    report.add_argument("project_id")
+    report.add_argument("--format", choices=["html", "md", "json", "csv", "sarif", "pdf"], default="html")
+    report.add_argument("--output", "-o")
+
+    update = commands.add_parser("update", help="Secure release check, plan, verified install, or rollback.")
+    update.add_argument("mode", choices=["check", "plan", "install", "rollback"], default="check", nargs="?")
+    update.add_argument("--archive")
+    update.add_argument("--checksum")
 
     security = commands.add_parser("security", help="Run defensive device posture checks and write reports.")
     security.add_argument("--output", "-o")
@@ -201,12 +293,18 @@ def build_parser() -> argparse.ArgumentParser:
     inventory = commands.add_parser("inventory", help="Export a device and application inventory.")
     inventory.add_argument("--output", "-o")
 
-    commands.add_parser("doctor", help="Validate Python, ADB, and optional tools.")
+    doctor = commands.add_parser("doctor", help="Validate Python, ADB, optional tools, drivers, and PATH.")
+    doctor.add_argument(
+        "--fix", action="store_true", help="Apply safe repairs such as creating directories and starting ADB."
+    )
 
     web = commands.add_parser("web", help="Start the local web interface.")
     web.add_argument("--host", default="127.0.0.1")
     web.add_argument("--port", type=int, default=8765)
     web.add_argument("--no-browser", action="store_true")
+    web.add_argument("--remote-token", help="Explicitly enable authenticated remote mode with this operator token.")
+    web.add_argument("--tls-cert", help="PEM certificate required for non-loopback remote mode.")
+    web.add_argument("--tls-key", help="PEM private key required for non-loopback remote mode.")
 
     return parser
 
@@ -217,6 +315,7 @@ def normalize_legacy_args(argv: list[str]) -> list[str]:
         return argv
     known_commands = {
         "devices",
+        "capabilities",
         "connect",
         "disconnect",
         "list",
@@ -224,6 +323,7 @@ def normalize_legacy_args(argv: list[str]) -> list[str]:
         "download",
         "pull",
         "install",
+        "install-set",
         "uninstall",
         "replace",
         "info",
@@ -242,6 +342,17 @@ def normalize_legacy_args(argv: list[str]) -> list[str]:
         "collect",
         "mastg",
         "inventory",
+        "plugin",
+        "bundle",
+        "evidence",
+        "assess",
+        "snapshot",
+        "project",
+        "findings",
+        "group",
+        "run-group",
+        "report",
+        "update",
         "doctor",
         "web",
     }
@@ -280,7 +391,15 @@ def run(args: argparse.Namespace) -> Any:
     if args.command == "web":
         from .webapp import serve
 
-        serve(host=args.host, port=args.port, open_browser=not args.no_browser, workspace=args.workspace)
+        serve(
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_browser,
+            workspace=args.workspace,
+            remote_token=args.remote_token,
+            tls_cert=args.tls_cert,
+            tls_key=args.tls_key,
+        )
         return None
 
     from .adb import AdbClient
@@ -307,6 +426,8 @@ def run(args: argparse.Namespace) -> Any:
         )
     if command == "devices":
         return service.devices()
+    if command == "capabilities":
+        return service.capabilities(serial)
     if command == "connect":
         return service.connect(args.target)
     if command == "disconnect":
@@ -336,6 +457,14 @@ def run(args: argparse.Namespace) -> Any:
             replace_existing=args.replace,
             grant_runtime_permissions=args.grant_runtime_permissions,
         )
+    if command == "install-set":
+        return service.install_apk_set(
+            serial,
+            args.source,
+            user=user,
+            replace_existing=args.replace,
+            grant_runtime_permissions=args.grant_runtime_permissions,
+        )
     if command == "uninstall":
         return service.uninstall_packages(
             serial, [*args.packages, *_read_lines(input_file)], user=user, keep_data=args.keep_data
@@ -348,7 +477,10 @@ def run(args: argparse.Namespace) -> Any:
             pairs.insert(0, (args.package, args.apk))
         if not pairs:
             raise AdbgathError("replace requires PACKAGE APK, or --file with replacement pairs.")
-        return [service.replace_app(serial, package, apk, user=user).to_dict() for package, apk in pairs]
+        return [
+            service.replace_app(serial, package, apk, user=user, allow_uninstall=args.allow_uninstall).to_dict()
+            for package, apk in pairs
+        ]
     if command == "info":
         return service.info(serial, args.mode)
     if command == "app":
@@ -393,9 +525,64 @@ def run(args: argparse.Namespace) -> Any:
     if command == "content":
         return service.content_providers(serial, args.package)
     if command == "frida":
-        return service.frida(serial, args.mode, args.package, args.script)
+        if args.mode == "scripts":
+            return service.frida_scripts()
+        if args.mode == "history":
+            return service.frida_history(args.limit)
+        return service.frida(serial, args.mode, args.package, args.script, redact=not args.no_redact)
     if command == "static":
         return service.static_analyze(args.apk, output=output)
+    if command == "bundle":
+        return service.bundle_operation(serial, args.mode, file=args.file, output=output)
+    if command == "evidence":
+        return service.capture_evidence(
+            serial,
+            package=args.package,
+            output=output,
+            screen_record_seconds=args.screen_record,
+            redact=not args.no_redact,
+        )
+    if command == "assess":
+        return service.assess(serial, args.package, apk=args.apk, project_id=args.project_id, output=output)
+    if command == "snapshot":
+        if args.snapshot_mode == "create":
+            return service.create_snapshot(serial, args.name, package=args.package, project_id=args.project_id)
+        if args.snapshot_mode == "list":
+            return service.store.list_snapshots(args.project_id)
+        return service.compare_snapshots(args.before, args.after, output=output)
+    if command == "project":
+        if args.project_mode == "list":
+            return service.store.list_projects()
+        if args.project_mode == "create":
+            return service.store.create_project(args.name, description=args.description, scope=args.scope)
+        if args.project_mode == "export":
+            return service.export_project_bundle(args.project_id, output=output)
+        return service.store.list_sessions(args.project_id)
+    if command == "findings":
+        if args.set_status:
+            finding_id, status = args.set_status
+            service.store.update_finding_status(finding_id, status)
+        return service.store.list_findings(args.project_id)
+    if command == "group":
+        if args.group_mode == "list":
+            return service.store.list_groups()
+        return service.groups_operation(args.group_mode, name=args.name, serial=args.serial)
+    if command == "run-group":
+        return service.run_group(args.group, args.operation)
+    if command == "plugin":
+        return service.plugin_operation(
+            {
+                "mode": args.plugin_mode,
+                "name": getattr(args, "name", None),
+                "package": getattr(args, "package", None),
+                "device": serial,
+                "allow_permissions": getattr(args, "allow_permission", []),
+            }
+        )
+    if command == "report":
+        return service.export_project_report(args.project_id, args.format, output=output)
+    if command == "update":
+        return service.update_operation(args.mode, archive=args.archive, checksum=args.checksum)
     if command == "security":
         return service.security_audit(serial, output=output)
     if command == "collect":
@@ -405,12 +592,12 @@ def run(args: argparse.Namespace) -> Any:
     if command == "inventory":
         return service.inventory(serial, output=output)
     if command == "doctor":
-        return service.doctor()
+        return service.doctor(fix=args.fix)
     raise AdbgathError(f"Unknown command: {command}")
 
 
 def interactive(parser: argparse.ArgumentParser) -> int:
-    print(BANNER.format(version=__version__))
+    print(banner(__version__))
     print("Interactive mode. Type 'help', 'web', or 'exit'.")
     while True:
         try:
@@ -447,7 +634,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parser.parse_args(normalize_legacy_args(raw))
         if not args.no_banner and args.command not in {"web"}:
-            print(BANNER.format(version=__version__))
+            print(banner(__version__))
         result = run(args)
         if result is not None:
             _print(result, as_json=args.json)

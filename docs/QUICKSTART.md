@@ -1,69 +1,97 @@
 # Quick start
 
-## Windows
+## 1. Install
+
+### Windows
 
 ```bat
 installers\windows\install.cmd
 ```
 
-Open a new terminal:
-
-```bat
-adbgath doctor
-adb devices -l
-adbgath devices
-adbgath web
-```
-
-## Linux
+### Linux
 
 ```bash
 chmod +x installers/linux/install.sh
 ./installers/linux/install.sh
-adbgath doctor
-adb devices -l
-adbgath devices
-adbgath web
 ```
 
-## Select a target
+## 2. Validate the host
+
+```bash
+adbgath --version
+adbgath doctor --fix
+adb devices -l
+adbgath devices
+```
+
+Approve the ADB RSA prompt on the device before continuing.
+
+## 3. Inspect profiles and packages
 
 ```bash
 adbgath --device SERIAL list users
 adbgath --device SERIAL --user current list packages --include-paths
+adbgath --device SERIAL app com.example.app
 ```
 
-State-changing operations require both an explicit device and profile:
+## 4. Create a project
 
 ```bash
-adbgath --device SERIAL --user 0 install ./app.apk
-adbgath --device SERIAL --user 0 uninstall com.example.app
+adbgath project create "Authorized Android assessment" --scope com.example.app
+adbgath project list
 ```
 
-## Batch input
+Copy the generated project ID.
 
-One package or APK path per line:
+## 5. Run an assessment
 
 ```bash
-adbgath --device SERIAL --user current download --file examples/packages.txt
-adbgath --device SERIAL --user 0 uninstall --file examples/packages.txt
-adbgath --device SERIAL --user 0 install --file examples/apks.txt
+adbgath --device SERIAL assess com.example.app --project-id PROJECT_ID
 ```
 
-Replacement file format:
-
-```text
-"C:/path with spaces/replacement.apk" com.example.app
-```
+## 6. Capture evidence
 
 ```bash
-adbgath --device SERIAL --user 0 replace --file examples/replacements.txt
+adbgath --device SERIAL evidence \
+  --package com.example.app \
+  --screen-record 10 \
+  --output ./evidence
 ```
 
-## Local web workspace
+## 7. Export reports
+
+```bash
+adbgath report PROJECT_ID --format html
+adbgath report PROJECT_ID --format pdf
+adbgath report PROJECT_ID --format sarif
+adbgath project export PROJECT_ID --output ./project-evidence.zip
+```
+
+## 8. Open the web workspace
 
 ```bash
 adbgath web
 ```
 
-Open `http://127.0.0.1:8765`. Select the device and profile before running operations. Destructive operations require the authorization checkbox.
+Open `http://127.0.0.1:8765`.
+
+## Common APK commands
+
+```bash
+adbgath --device SERIAL --user current download com.example.app
+adbgath --device SERIAL --user 0 install app.apk --replace
+adbgath --device SERIAL --user 0 install-set ./split-apks
+adbgath --device SERIAL --user 0 replace com.example.app replacement.apk
+```
+
+Add `--allow-uninstall` to `replace` only after reviewing signature compatibility and data-loss implications.
+
+## Optional controlled Frida observation
+
+```bash
+adbgath frida scripts
+adbgath --device SERIAL frida attach --package com.example.app --script tls-observer
+adbgath frida history --limit 25
+```
+
+Stored session logs are redacted by default.

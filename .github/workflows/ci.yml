@@ -21,8 +21,61 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check src tests
+      - run: python -m ruff check .
+      - run: python -m compileall -q src
       - run: python -m pytest
+      - run: node --check src/adbgath/web/static/app.js
       - run: adbgath --version
+      - name: Validate Bash installers
+        if: runner.os == 'Linux'
+        run: bash -n installers/linux/*.sh
+      - name: Parse PowerShell installers
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Get-ChildItem installers/windows/*.ps1 | ForEach-Object {
+            [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
+          }
+      - name: Parse CMD launchers
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          findstr /C:"powershell.exe" installers\windows\install.cmd
+          findstr /C:"uninstall.ps1" installers\windows\uninstall.cmd
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip build
+      - run: python -m build
+      - run: python -m venv /tmp/adbgath-wheel-test
+      - run: /tmp/adbgath-wheel-test/bin/python -m pip install dist/*.whl
+      - run: /tmp/adbgath-wheel-test/bin/adbgath --version
+      - run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          wheel = next(Path('dist').glob('*.whl'))
+          with zipfile.ZipFile(wheel) as archive:
+              names = set(archive.namelist())
+          required = {
+              'adbgath/web/static/index.html',
+              'adbgath/web/static/app.js',
+              'adbgath/web/static/styles.css',
+              'adbgath/frida/scripts/tls-observer.js',
+              'adbgath/frida/scripts/crypto-monitor.js',
+              'adbgath/frida/scripts/webview-observer.js',
+          }
+          missing = required - names
+          if missing:
+              raise SystemExit(f'Missing packaged resources: {sorted(missing)}')
+          PY

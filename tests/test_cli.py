@@ -44,9 +44,7 @@ def test_replace_file_and_logcat_legacy_filters_parse(tmp_path):
     assert replace_args.command == "replace"
     assert replace_args.input_file == str(replacements)
 
-    log_args = build_parser().parse_args(
-        ["logs", "capture", "--grep", "exception", "--filter", "*:W", "--clear-logs"]
-    )
+    log_args = build_parser().parse_args(["logs", "capture", "--grep", "exception", "--filter", "*:W", "--clear-logs"])
     assert log_args.regex == "exception"
     assert log_args.filters == ["*:W"]
     assert log_args.clear_first is True
@@ -55,12 +53,43 @@ def test_replace_file_and_logcat_legacy_filters_parse(tmp_path):
 def test_all_cli_command_help_parses():
     parser = build_parser()
     commands = [
-        ["devices"], ["connect", "127.0.0.1:5555"], ["disconnect", "127.0.0.1:5555"],
-        ["list", "users"], ["download"], ["install"], ["uninstall"], ["replace"],
-        ["info"], ["app", "com.example.app"], ["runtime"], ["logs"],
-        ["sniff", "interfaces"], ["proxy", "show"], ["forward", "forward", "8080", "8080"],
-        ["backup", "com.example.app"], ["content"], ["frida"], ["static", "app.apk"],
-        ["security"], ["collect"], ["mastg"], ["inventory"], ["doctor"], ["web"],
+        ["devices"],
+        ["connect", "127.0.0.1:5555"],
+        ["disconnect", "127.0.0.1:5555"],
+        ["list", "users"],
+        ["download"],
+        ["install"],
+        ["uninstall"],
+        ["replace"],
+        ["info"],
+        ["app", "com.example.app"],
+        ["runtime"],
+        ["logs"],
+        ["sniff", "interfaces"],
+        ["proxy", "show"],
+        ["forward", "forward", "8080", "8080"],
+        ["backup", "com.example.app"],
+        ["content"],
+        ["frida"],
+        ["static", "app.apk"],
+        ["install-set", "splits"],
+        ["bundle", "inspect", "app.apks"],
+        ["evidence"],
+        ["assess", "com.example.app"],
+        ["snapshot", "list"],
+        ["project", "list"],
+        ["findings"],
+        ["group", "list"],
+        ["run-group", "lab", "inventory"],
+        ["plugin", "list"],
+        ["report", "prj_example"],
+        ["update", "check"],
+        ["security"],
+        ["collect"],
+        ["mastg"],
+        ["inventory"],
+        ["doctor"],
+        ["web"],
     ]
     for argv in commands:
         parsed = parser.parse_args(argv)

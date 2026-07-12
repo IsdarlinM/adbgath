@@ -12,8 +12,7 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark"><span>&gt;_</span></div>
-        <div><strong>ADB<span>GATH</span></strong><small>DEFENSIVE MOBILE LAB</small></div>
+        <div class="brand-wordmark"><strong>ADB-Gath</strong><small>Defensive ADB Toolkit</small></div>
       </div>
       <nav id="nav">
         <button class="nav-item active" data-view="overview"><span>◈</span>Overview</button>
@@ -21,6 +20,7 @@
         <button class="nav-item" data-view="packages"><span>▦</span>Apps & APKs</button>
         <button class="nav-item" data-view="logs"><span>≋</span>Live Logcat</button>
         <button class="nav-item" data-view="security"><span>⬡</span>Security Audit</button>
+        <button class="nav-item" data-view="workspace"><span>◇</span>Projects & Jobs</button>
         <button class="nav-item" data-view="artifacts"><span>◫</span>Artifacts</button>
       </nav>
       <div class="side-foot">
@@ -53,10 +53,16 @@
           <article class="metric"><span>CONNECTED TARGETS</span><strong id="deviceCount">0</strong><small id="deviceHint">Waiting for ADB</small></article>
           <article class="metric"><span>ENGINE HEALTH</span><strong id="healthValue">--</strong><small id="healthHint">Running diagnostics</small></article>
           <article class="metric"><span>WORKSPACE</span><strong id="artifactCount">0</strong><small>Generated artifacts</small></article>
-          <article class="metric accent"><span>VERSION</span><strong id="versionValue">3.0.0</strong><small>Cross-platform core</small></article>
+          <article class="metric accent"><span>VERSION</span><strong id="versionValue">3.2.9</strong><small>Cross-platform core</small></article>
         </div>
         <div class="dashboard-grid">
           <article class="panel hero-panel">
+            <pre class="owner-logo" aria-label="ADB-Gath logo"> █████╗ ██████╗ ██████╗       ██████╗  █████╗ ████████╗██╗  ██╗███████╗██████╗
+██╔══██╗██╔══██╗██╔══██╗     ██╔════╝ ██╔══██╗╚══██╔══╝██║  ██║██╔════╝██╔══██╗
+███████║██║  ██║██████╔╝█████╗██║  ███╗███████║   ██║   ███████║█████╗  ██████╔╝
+██╔══██║██║  ██║██╔══██╗╚════╝██║   ██║██╔══██║   ██║   ██╔══██║██╔══╝  ██╔══██╗
+██║  ██║██████╔╝██████╔╝      ╚██████╔╝██║  ██║   ██║   ██║  ██║███████╗██║  ██║
+╚═╝  ╚═╝╚═════╝ ╚═════╝        ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝</pre>
             <div class="panel-head"><div><span class="tag">MISSION CONTROL</span><h2>Android evidence, without platform lock-in.</h2></div></div>
             <p>Run the same validated operations from Windows, Linux, the CLI, or this local browser workspace. No arbitrary shell endpoint is exposed.</p>
             <div class="hero-actions">
@@ -83,6 +89,12 @@
             <div class="panel-head"><div><span class="tag">ALLOWLISTED OPERATIONS</span><h2>Command center</h2></div></div>
             <label class="field-label">CAPABILITY</label>
             <select id="actionSelect" class="large-select"></select>
+            <div class="preset-row">
+              <select id="presetSelect" aria-label="Saved operation preset"><option value="">Saved form presets</option></select>
+              <button id="loadPreset" class="secondary" type="button">Load</button>
+              <button id="savePreset" class="secondary" type="button">Save</button>
+              <button id="deletePreset" class="text-button" type="button">Delete</button>
+            </div>
             <div id="dynamicFields" class="form-grid"></div>
             <div id="dangerConfirm" class="danger-confirm hidden">
               <div><strong>Explicit authorization required</strong><span>This action changes device state. Confirm that the selected device is in scope.</span></div>
@@ -104,12 +116,13 @@
         <div class="dashboard-grid">
           <article class="panel">
             <div class="panel-head"><div><span class="tag">PACKAGE INVENTORY</span><h2>Installed applications</h2></div><button id="loadPackages" class="primary compact-btn">LOAD</button></div>
-            <div class="filter-row"><input id="packageSearch" placeholder="Filter packages…"><label><input type="checkbox" id="includePaths"> Include APK paths</label></div>
+            <div class="filter-row"><input id="packageSearch" placeholder="Filter packages…"><label><input type="checkbox" id="includePaths"> Include APK paths</label><select id="packageSort" aria-label="Package sorting"><option value="asc">A–Z</option><option value="desc">Z–A</option></select><select id="packagePageSize" aria-label="Rows per page"><option>25</option><option selected>50</option><option>100</option></select></div>
             <div id="packageList" class="package-list empty-state">Select a device and load packages.</div>
+            <div class="pagination-row"><button id="packagePrev" class="secondary compact-btn" disabled>Previous</button><span id="packagePageLabel">Page 0 of 0</span><button id="packageNext" class="secondary compact-btn" disabled>Next</button></div>
           </article>
           <article class="panel">
             <div class="panel-head"><div><span class="tag">FILE STAGING</span><h3>Upload APK or tool</h3></div></div>
-            <label class="dropzone" id="dropzone"><input id="fileUpload" type="file"><span>Drop a file here or click to browse</span><small>Maximum 512 MiB. Files stay in the local workspace.</small></label>
+            <label class="dropzone" id="dropzone"><input id="fileUpload" type="file" multiple><span>Drop one or more files here or click to browse</span><small>Maximum 512 MiB per file. Files stay in the local workspace.</small></label>
             <div id="uploadResult" class="upload-result"></div>
             <div class="quick-grid">
               <button class="module-card quick-action" data-action="download"><strong>Pull APKs</strong><span>Download selected packages or paths.</span></button>
@@ -123,13 +136,14 @@
 
       <section id="view-logs" class="view">
         <article class="panel live-panel">
-          <div class="panel-head"><div><span class="tag live">LIVE</span><h2>Logcat stream</h2></div><div class="stream-actions"><button id="startLogs" class="primary">Start stream</button><button id="stopLogs" class="secondary" disabled>Stop</button><button id="clearLogs" class="text-button">Clear buffer</button></div></div>
+          <div class="panel-head"><div><span class="tag live">LIVE</span><h2>Logcat stream</h2></div><div class="stream-actions"><button id="startLogs" class="primary">Start stream</button><button id="stopLogs" class="secondary" disabled>Stop</button><button id="pauseLogs" class="secondary" disabled>Pause</button><button id="bookmarkLog" class="secondary" disabled>Bookmark</button><button id="exportLogs" class="secondary" disabled>Export</button><button id="clearLogs" class="text-button">Clear buffer</button></div></div>
           <div class="form-grid log-controls">
             <label><span>Package filter</span><input id="logPackage" placeholder="com.example.app"></label>
             <label><span>Regex filter</span><input id="logRegex" placeholder="token|password|exception"></label>
             <label><span>Format</span><select id="logFormat"><option>threadtime</option><option>brief</option><option>time</option><option>process</option></select></label>
           </div>
           <pre id="liveConsole" class="console live-console">Live output will appear here.</pre>
+          <div id="logBookmarks" class="bookmark-list empty-state">No log bookmarks.</div>
         </article>
       </section>
 
@@ -139,9 +153,29 @@
           <div class="security-actions"><button id="runSecurity" class="primary">Run audit</button><button id="runMastg" class="secondary">Build MASTG bundle</button></div>
         </div>
         <div id="findingSummary" class="metric-grid compact-metrics"></div>
+        <article class="panel severity-panel"><div class="panel-head"><div><span class="tag">SEVERITY DISTRIBUTION</span><h3>Finding profile</h3></div></div><div id="severityChart" class="severity-chart empty-state">Run an audit to build the severity chart.</div></article>
         <article class="panel"><div class="panel-head"><div><span class="tag">FINDINGS</span><h3>Audit results</h3></div></div><div id="findings" class="finding-list empty-state">Run an audit to populate findings.</div></article>
       </section>
 
+
+      <section id="view-workspace" class="view">
+        <div class="workspace-toolbar">
+          <div><span class="tag">PERSISTENT WORKSPACE</span><h2>Projects, jobs, snapshots and findings</h2></div>
+          <div class="workspace-actions"><button id="refreshWorkspace" class="secondary">Refresh</button><button class="primary" data-preset="projects">New project</button></div>
+        </div>
+        <div class="metric-grid compact-metrics">
+          <article class="metric"><span>PROJECTS</span><strong id="projectCount">0</strong></article>
+          <article class="metric"><span>ACTIVE JOBS</span><strong id="activeJobCount">0</strong></article>
+          <article class="metric"><span>SNAPSHOTS</span><strong id="snapshotCount">0</strong></article>
+          <article class="metric"><span>FINDINGS</span><strong id="storedFindingCount">0</strong></article>
+        </div>
+        <div class="workspace-grid">
+          <article class="panel"><div class="panel-head"><div><span class="tag">PROJECTS</span><h3>Assessment workspaces</h3></div></div><div id="projectList" class="data-list empty-state">No projects.</div></article>
+          <article class="panel"><div class="panel-head"><div><span class="tag">JOBS</span><h3>Background execution</h3></div></div><div id="jobList" class="data-list empty-state">No jobs.</div></article>
+          <article class="panel"><div class="panel-head"><div><span class="tag">SNAPSHOTS</span><h3>Comparable states</h3></div></div><div id="snapshotList" class="data-list empty-state">No snapshots.</div></article>
+          <article class="panel"><div class="panel-head"><div><span class="tag">FINDINGS</span><h3>Tracked issues</h3></div></div><div id="storedFindingList" class="data-list empty-state">No saved findings.</div></article>
+        </div>
+      </section>
       <section id="view-artifacts" class="view">
         <article class="panel"><div class="panel-head"><div><span class="tag">LOCAL WORKSPACE</span><h2>Generated artifacts</h2></div></div><p class="muted">Artifacts appear in execution results and can be opened from the local workspace. The web server prevents downloads outside this directory.</p><div id="artifactList" class="artifact-list empty-state">No artifacts generated in this session.</div></article>
       </section>

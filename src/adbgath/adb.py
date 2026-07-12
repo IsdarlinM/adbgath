@@ -101,6 +101,48 @@ class AdbClient:
             )
         return result
 
+    def run_binary(
+        self,
+        args: Sequence[str],
+        *,
+        serial: str | None = None,
+        timeout: int | None = None,
+        check: bool = True,
+    ) -> CommandResult:
+        command = self.build(args, serial=serial)
+        started = time.monotonic()
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=False,
+                timeout=timeout or self.default_timeout,
+                shell=False,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise CommandExecutionError(
+                f"ADB binary command timed out after {timeout or self.default_timeout} seconds.",
+                returncode=124,
+                stderr=str(exc),
+            ) from exc
+        result = CommandResult(
+            ok=completed.returncode == 0,
+            command=command,
+            stdout="",
+            stderr=completed.stderr.decode("utf-8", errors="replace"),
+            returncode=completed.returncode,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            metadata={"bytes": completed.stdout},
+        )
+        if check and not result.ok:
+            raise CommandExecutionError(
+                f"ADB command failed: {result.stderr.strip() or 'Unknown ADB error'}",
+                returncode=result.returncode,
+                stderr=result.stderr,
+            )
+        return result
+
     def stream(
         self,
         args: Sequence[str],
@@ -171,3 +213,65 @@ class AdbClient:
         if not devices:
             raise CommandExecutionError("No authorized Android device is connected.", returncode=2)
         raise CommandExecutionError("Multiple devices are connected. Select one with --device.", returncode=2)
+
+
+class UnavailableAdbClient:
+    """ADB-compatible placeholder used when Platform-Tools is unavailable.
+
+    This lets diagnostics, documentation, project management, and the local web
+    interface start before ADB is installed. Device operations still fail closed
+    with the original dependency error.
+    """
+
+    def __init__(self, reason: str, *, default_timeout: int = 60) -> None:
+        self.reason = reason
+        self.default_timeout = default_timeout
+        self.adb_path = Path("adb.exe" if os.name == "nt" else "adb")
+
+    def _raise(self) -> None:
+        raise DependencyError(self.reason)
+
+    def build(self, args: Sequence[str], *, serial: str | None = None) -> list[str]:
+        command = [str(self.adb_path)]
+        if serial:
+            command.extend(["-s", validate_serial(serial)])
+        command.extend(str(item) for item in args)
+        return command
+
+    def run(
+        self,
+        args: Sequence[str],
+        *,
+        serial: str | None = None,
+        timeout: int | None = None,
+        check: bool = True,
+        cwd: Path | None = None,
+    ) -> CommandResult:
+        del args, serial, timeout, check, cwd
+        self._raise()
+
+    def run_binary(
+        self,
+        args: Sequence[str],
+        *,
+        serial: str | None = None,
+        timeout: int | None = None,
+        check: bool = True,
+    ) -> CommandResult:
+        del args, serial, timeout, check
+        self._raise()
+
+    def stream(self, args: Sequence[str], *, serial: str | None = None) -> Iterator[str]:
+        del args, serial
+        self._raise()
+        yield ""  # pragma: no cover - preserves generator typing after the fail-closed raise
+
+    def version(self) -> CommandResult:
+        self._raise()
+
+    def devices(self) -> list[Device]:
+        self._raise()
+
+    def require_device(self, serial: str | None) -> str:
+        del serial
+        self._raise()

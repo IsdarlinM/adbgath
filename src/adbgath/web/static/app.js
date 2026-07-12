@@ -1,59 +1,31 @@
 "use strict";
 
 const state = {
-  devices: [],
-  packages: [],
-  artifacts: [],
-  uploads: [],
-  destructive: new Set(),
-  socket: null,
+  devices: [], packages: [], artifacts: [], uploads: [], jobs: [], projects: [],
+  snapshots: [], findings: [], operations: new Map(), destructive: new Set(),
+  longRunning: new Set(), socket: null, jobTimer: null, packagePage: 1, packagePageSize: 50,
+  logLines: [], logsPaused: false, logBookmarks: [],
 };
+
+const PRESET_STORAGE_KEY = "adbgath.operationPresets.v1";
+const MAX_LOG_LINES = 5000;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-
-const ACTIONS = {
-  devices: { label: "Devices / list connected targets", fields: [] },
-  connect: { label: "Devices / wireless connect", fields: [{name:"target", label:"Host and port", placeholder:"192.168.1.50:5555", required:true}] },
-  disconnect: { label: "Devices / wireless disconnect", fields: [{name:"target", label:"Host and port", placeholder:"192.168.1.50:5555", required:true}] },
-  users: { label: "Inventory / Android users and profiles", fields: [] },
-  packages: { label: "Inventory / installed packages", fields: [{name:"include_paths", label:"Include APK paths", type:"checkbox"},{name:"system", label:"Package scope", type:"select", options:[["","All"],["true","System"],["false","Third-party"]]}] },
-  paths: { label: "Apps / resolve APK paths", fields: [{name:"package", label:"Optional package name", placeholder:"Blank lists all APK paths"}] },
-  download: { label: "APKs / download packages or remote paths", fields: [{name:"packages", label:"Packages (comma-separated)", placeholder:"com.example.one, com.example.two", full:true},{name:"remote_paths", label:"Remote APK paths (comma-separated)", placeholder:"/data/app/.../base.apk", full:true},{name:"output", label:"Output directory", placeholder:"Leave empty for workspace/apks", full:true}] },
-  install: { label: "APKs / install staged files", danger:true, fields: [{name:"files", label:"Local APK paths (comma-separated)", placeholder:"Use an uploaded file path", full:true, required:true},{name:"replace_existing", label:"Replace existing application", type:"checkbox"},{name:"grant_runtime_permissions", label:"Grant runtime permissions", type:"checkbox"}] },
-  uninstall: { label: "APKs / uninstall packages", danger:true, fields: [{name:"packages", label:"Packages (comma-separated)", placeholder:"com.example.app", full:true, required:true},{name:"keep_data", label:"Keep app data", type:"checkbox"}] },
-  replace: { label: "APKs / replace package with staged APK", danger:true, fields: [{name:"package", label:"Package", placeholder:"com.example.app"},{name:"file", label:"Replacement APK path", placeholder:"Workspace upload path"},{name:"replacement_pairs", label:"Optional batch pairs: APK_PATH PACKAGE (one per line)", placeholder:"C:\\path\\app.apk com.example.app", full:true}] },
-  info: { label: "Device / information", fields: [{name:"mode", label:"Information profile", type:"select", options:[["basic","Basic"],["system","System"],["network","Network"],["security","Security"],["all","All"]]}] },
-  app: { label: "Apps / package summary and permissions", fields: [{name:"package", label:"Package name", placeholder:"com.example.app", required:true}] },
-  runtime: { label: "Runtime / processes, activities, services", fields: [{name:"mode", label:"Runtime view", type:"select", options:[["summary","Summary"],["processes","Processes"],["activities","Activities"],["services","Services"]]},{name:"package", label:"Optional package", placeholder:"com.example.app"}] },
-  logs_capture: { label: "Logs / timed logcat capture", fields: [{name:"package", label:"Package filter", placeholder:"com.example.app"},{name:"pid", label:"PID", type:"number"},{name:"regex", label:"Regex", placeholder:"token|password|exception"},{name:"duration", label:"Duration (seconds)", type:"number", value:"30"},{name:"format", label:"Logcat format", type:"select", options:[["threadtime","threadtime"],["brief","brief"],["time","time"],["process","process"]]},{name:"clear", label:"Clear buffer first", type:"checkbox"},{name:"output", label:"Output file", placeholder:"Leave empty for workspace/logs", full:true}] },
-  logs_clear: { label: "Logs / clear logcat buffer", fields: [] },
-  sniff_interfaces: { label: "Network / list device interfaces", fields: [] },
-  sniff_capture: { label: "Network / rooted tcpdump capture", fields: [{name:"interface", label:"Interface", value:"wlan0"},{name:"duration", label:"Duration (seconds)", type:"number", value:"30"},{name:"output", label:"Output PCAP", placeholder:"Leave empty for workspace/captures", full:true}] },
-  push_tcpdump: { label: "Network / push tcpdump binary", danger:true, fields: [{name:"file", label:"Local tcpdump path", placeholder:"Workspace upload path", required:true, full:true}] },
-  proxy: { label: "Network / global HTTP proxy", danger:true, fields: [{name:"mode", label:"Proxy action", type:"select", options:[["show","Show"],["set","Set"],["clear","Clear"]]},{name:"spec", label:"Proxy host and port", placeholder:"127.0.0.1:8080"}] },
-  forward: { label: "Network / ADB TCP mapping", danger:true, fields: [{name:"mode", label:"Mapping direction", type:"select", options:[["forward","Forward"],["reverse","Reverse"]]},{name:"local_port", label:"Local port", type:"number", value:"8080"},{name:"remote_port", label:"Remote port", type:"number", value:"8080"}] },
-  backup: { label: "Evidence / debuggable app data backup", fields: [{name:"package", label:"Package", placeholder:"com.example.app", required:true},{name:"output", label:"Output TAR", placeholder:"Leave empty for workspace/backups"}] },
-  content: { label: "Apps / content providers", fields: [{name:"package", label:"Optional package filter", placeholder:"com.example.app"}] },
-  frida: { label: "Instrumentation / Frida tools", fields: [{name:"mode", label:"Frida action", type:"select", options:[["ps","List apps/processes"],["attach","Attach"],["spawn","Spawn"]]},{name:"package", label:"Package", placeholder:"com.example.app"},{name:"script", label:"Optional script path", placeholder:"Workspace upload path", full:true}] },
-  static: { label: "Static / local APK analysis", fields: [{name:"file", label:"Local APK path", placeholder:"Workspace upload path", required:true, full:true},{name:"output", label:"Output JSON", placeholder:"Leave empty for workspace/reports", full:true}] },
-  security: { label: "Security / device posture audit", fields: [{name:"output", label:"Output JSON", placeholder:"Leave empty for workspace/reports", full:true}] },
-  collect: { label: "Evidence / full device collection", fields: [{name:"output", label:"Output directory", placeholder:"Leave empty for workspace/collections", full:true}] },
-  mastg: { label: "Evidence / OWASP MASTG-oriented bundle", fields: [{name:"output", label:"Output directory", placeholder:"Leave empty for workspace/collections", full:true}] },
-  doctor: { label: "System / dependency doctor", fields: [] },
-  inventory: { label: "Inventory / device and application export", fields: [{name:"output", label:"Optional output JSON", placeholder:"Workspace path", full:true}] },
-};
 
 function toast(message, error = false) {
   const node = $("#toast");
   node.textContent = message;
   node.className = `toast show${error ? " error" : ""}`;
   clearTimeout(node._timer);
-  node._timer = setTimeout(() => node.className = "toast", 3200);
+  node._timer = setTimeout(() => { node.className = "toast"; }, 3200);
 }
 
 function selectedDevice() { return $("#deviceSelect").value || null; }
 function selectedUser() { return $("#userInput").value.trim() || null; }
+function escapeHtml(value) { const div = document.createElement("div"); div.textContent = String(value ?? ""); return div.innerHTML; }
+function formatBytes(bytes) { if (!bytes) return "0 B"; const units=["B","KiB","MiB","GiB"]; const i=Math.min(Math.floor(Math.log(bytes)/Math.log(1024)),units.length-1); return `${(bytes/1024**i).toFixed(i?1:0)} ${units[i]}`; }
+function operation(name) { return state.operations.get(name); }
 
 function setOutput(value) {
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -68,9 +40,10 @@ function collectArtifacts(value) {
     if (Array.isArray(node)) return node.forEach(walk);
     if (typeof node === "object") {
       Object.entries(node).forEach(([key, item]) => {
-        if (["artifact", "artifacts"].includes(key)) {
-          if (Array.isArray(item)) found.push(...item);
+        if (["artifact", "artifacts", "reports", "manifest"].includes(key)) {
+          if (Array.isArray(item)) found.push(...item.filter(value => typeof value === "string"));
           else if (typeof item === "string") found.push(item);
+          else if (item && typeof item === "object") found.push(...Object.values(item).filter(value => typeof value === "string"));
         }
         walk(item);
       });
@@ -82,7 +55,8 @@ function collectArtifacts(value) {
 }
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {credentials:"same-origin", ...options, headers:{"Content-Type":"application/json", ...(options.headers || {})}});
+  const headers = options.body instanceof FormData ? (options.headers || {}) : {"Content-Type":"application/json", ...(options.headers || {})};
+  const response = await fetch(url, {credentials:"same-origin", ...options, headers});
   const data = await response.json().catch(() => ({ok:false, error:`HTTP ${response.status}`}));
   if (!response.ok || data.ok === false) throw new Error(data.error || data.detail || `HTTP ${response.status}`);
   return data;
@@ -94,14 +68,47 @@ async function execute(action, payload = {}, confirmation = null) {
   const response = await api("/api/execute", {method:"POST", body:JSON.stringify({action, payload:merged, confirmation})});
   setOutput(response.data);
   toast(`${action} completed`);
+  await refreshWorkspace(false);
   return response.data;
+}
+
+async function submitJob(action, payload = {}, confirmation = null) {
+  const merged = {device:selectedDevice(), user:selectedUser(), ...payload};
+  setOutput(`Queueing ${action}…`);
+  const response = await api("/api/jobs", {method:"POST", body:JSON.stringify({action, payload:merged, confirmation})});
+  toast(`${action} queued`);
+  switchView("workspace");
+  await refreshWorkspace(false);
+  watchJob(response.data.id);
+  return response.data;
+}
+
+async function watchJob(jobId) {
+  clearInterval(state.jobTimer);
+  const poll = async () => {
+    try {
+      const job = (await api(`/api/jobs/${encodeURIComponent(jobId)}`)).data;
+      setOutput(job);
+      await refreshWorkspace(false);
+      if (["completed", "failed", "cancelled"].includes(job.status)) {
+        clearInterval(state.jobTimer);
+        state.jobTimer = null;
+        if (job.result) collectArtifacts(job.result);
+        toast(`${job.action} ${job.status}`, job.status === "failed");
+      }
+    } catch (error) { clearInterval(state.jobTimer); state.jobTimer = null; toast(error.message, true); }
+  };
+  await poll();
+  if (!state.jobTimer) state.jobTimer = setInterval(poll, 1200);
 }
 
 function switchView(name) {
   $$(".view").forEach(view => view.classList.toggle("active", view.id === `view-${name}`));
   $$(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.view === name));
-  const titles = {overview:"Operations overview", operations:"Command center", packages:"Apps and APK workspace", logs:"Live logcat", security:"Security audit", artifacts:"Generated artifacts"};
-  $("#pageTitle").textContent = titles[name] || "adbgath";
+  const titles = {overview:"Operations overview", operations:"Command center", packages:"Apps and APK workspace", logs:"Live logcat", security:"Security audit", workspace:"Projects and execution jobs", artifacts:"Generated artifacts"};
+  $("#pageTitle").textContent = titles[name] || "ADB-Gath";
+  if (name === "workspace") refreshWorkspace(false);
+  if (name === "artifacts") loadArtifacts();
 }
 
 function renderDevices(devices) {
@@ -125,7 +132,17 @@ function renderDoctor(doctor) {
   $("#healthHint").textContent = doctor?.ok ? "Core dependencies available" : (doctor?.error || "Review dependencies");
   $("#engineStatus").textContent = doctor?.ok ? "ENGINE ONLINE" : "ATTENTION";
   $(".status-dot").className = `status-dot ${doctor?.ok ? "online" : "offline"}`;
-  $("#doctorChecks").innerHTML = checks.slice(0, 7).map(check => `<div class="check-item ${check.ok ? "ok" : "fail"}"><span>${escapeHtml(check.name)}</span><span title="${escapeHtml(String(check.value))}">${escapeHtml(String(check.value))}</span></div>`).join("") || `<div class="empty-state">${escapeHtml(doctor?.error || "No diagnostics available")}</div>`;
+  $("#doctorChecks").innerHTML = checks.slice(0, 8).map(check => `<div class="check-item ${check.ok ? "ok" : "fail"}"><span>${escapeHtml(check.name)}</span><span title="${escapeHtml(String(check.value))}">${escapeHtml(String(check.value))}</span></div>`).join("") || `<div class="empty-state">${escapeHtml(doctor?.error || "No diagnostics available")}</div>`;
+}
+
+function installOperationCatalog(items) {
+  state.operations = new Map((items || []).map(item => [item.name, item]));
+  const select = $("#actionSelect");
+  const grouped = {};
+  for (const item of items || []) (grouped[item.category] ||= []).push(item);
+  select.innerHTML = Object.entries(grouped).map(([category, operations]) => `<optgroup label="${escapeHtml(category)}">${operations.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.title)}</option>`).join("")}</optgroup>`).join("");
+  if (state.operations.has("devices")) select.value = "devices";
+  renderActionForm(select.value);
 }
 
 async function bootstrap() {
@@ -133,13 +150,17 @@ async function bootstrap() {
     const data = await api("/api/bootstrap");
     $("#versionValue").textContent = data.version;
     state.destructive = new Set(data.destructive_actions || []);
+    state.longRunning = new Set(data.long_running_actions || []);
+    installOperationCatalog(data.operations || []);
     renderDevices(data.devices);
     renderDoctor(data.doctor);
-    setOutput({status:"ready", version:data.version, workspace:data.workspace, devices:data.devices.length});
+    state.projects = data.projects || []; state.snapshots = data.snapshots || []; state.jobs = data.jobs || [];
+    renderWorkspace();
+    setOutput({status:"ready", version:data.version, workspace:data.workspace, devices:data.devices.length, operations:state.operations.size});
+    await Promise.allSettled([loadArtifacts(), loadStoredFindings()]);
   } catch (error) {
     renderDoctor({ok:false, error:error.message, checks:[]});
-    setOutput({error:error.message});
-    toast(error.message, true);
+    setOutput({error:error.message}); toast(error.message, true);
   }
 }
 
@@ -148,60 +169,119 @@ async function refreshDevices() {
   catch (error) { toast(error.message, true); }
 }
 
-function renderActionForm(action) {
-  const config = ACTIONS[action];
+function readPresets() {
+  try {
+    const value = JSON.parse(localStorage.getItem(PRESET_STORAGE_KEY) || "[]");
+    return Array.isArray(value) ? value.filter(item => item && typeof item.name === "string" && typeof item.action === "string") : [];
+  } catch (_) { return []; }
+}
+
+function writePresets(items) {
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(items.slice(0, 100)));
+  renderPresetSelect();
+}
+
+function renderPresetSelect() {
+  const select = $("#presetSelect");
+  if (!select) return;
+  const previous = select.value;
+  const presets = readPresets();
+  select.innerHTML = '<option value="">Saved form presets</option>' + presets.map((item, index) => `<option value="${index}">${escapeHtml(item.name)} · ${escapeHtml(item.action)}</option>`).join("");
+  if ([...select.options].some(option => option.value === previous)) select.value = previous;
+}
+
+function saveCurrentPreset() {
+  try {
+    const action = $("#actionSelect").value;
+    const name = window.prompt("Preset name", `${action} preset`);
+    if (!name) return;
+    const safeName = name.trim().slice(0, 80);
+    if (!safeName) return;
+    const payload = formPayload();
+    const presets = readPresets().filter(item => item.name !== safeName);
+    presets.unshift({name:safeName, action, payload, updatedAt:new Date().toISOString()});
+    writePresets(presets);
+    $("#presetSelect").value = "0";
+    toast("Preset saved locally in this browser");
+  } catch (error) { toast(error.message, true); }
+}
+
+function loadSelectedPreset() {
+  const index = Number($("#presetSelect").value);
+  const preset = readPresets()[index];
+  if (!preset || !state.operations.has(preset.action)) return toast("Select a valid preset.", true);
+  $("#actionSelect").value = preset.action;
+  renderActionForm(preset.action);
+  for (const [name, value] of Object.entries(preset.payload || {})) {
+    const input = $(`[name="${name}"]`, $("#dynamicFields"));
+    if (!input) continue;
+    if (input.type === "checkbox") input.checked = Boolean(value);
+    else input.value = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+  }
+  toast("Preset loaded");
+}
+
+function deleteSelectedPreset() {
+  const index = Number($("#presetSelect").value);
+  const presets = readPresets();
+  if (!Number.isInteger(index) || !presets[index]) return toast("Select a preset to delete.", true);
+  presets.splice(index, 1);
+  writePresets(presets);
+  toast("Preset deleted");
+}
+
+function renderActionForm(actionName) {
+  const config = operation(actionName);
   const root = $("#dynamicFields");
   root.innerHTML = "";
-  config.fields.forEach(field => {
+  if (!config) return;
+  const description = document.createElement("div");
+  description.className = "operation-description full";
+  description.innerHTML = `<strong>${escapeHtml(config.title)}</strong><span>${escapeHtml(config.description)}</span>${config.requirements?.length ? `<small>Requires: ${escapeHtml(config.requirements.join(", "))}</small>` : ""}`;
+  root.appendChild(description);
+  for (const field of config.fields || []) {
     const label = document.createElement("label");
-    if (field.full) label.classList.add("full");
-    if (field.type === "checkbox") label.classList.add("checkbox-field");
-    if (field.type === "checkbox") {
-      label.innerHTML = `<input type="checkbox" name="${field.name}"><span>${escapeHtml(field.label)}</span>`;
+    if (["textarea", "list", "file"].includes(field.field_type)) label.classList.add("full");
+    if (field.field_type === "boolean") label.classList.add("checkbox-field");
+    if (field.field_type === "boolean") {
+      label.innerHTML = `<input type="checkbox" name="${escapeHtml(field.name)}" ${field.default ? "checked" : ""}><span>${escapeHtml(field.label)}</span>`;
     } else {
       label.innerHTML = `<span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span>`;
       let input;
-      if (field.type === "select") {
+      if (field.field_type === "select") {
         input = document.createElement("select");
-        field.options.forEach(([value, text]) => input.add(new Option(text, value)));
+        for (const choice of field.choices || []) input.add(new Option(choice, choice));
+      } else if (["textarea", "list"].includes(field.field_type)) {
+        input = document.createElement("textarea");
+        input.rows = field.field_type === "list" ? 3 : 4;
       } else {
         input = document.createElement("input");
-        input.type = field.type || "text";
-        input.placeholder = field.placeholder || "";
-        input.value = field.value || "";
+        input.type = field.field_type === "number" ? "number" : "text";
       }
-      input.name = field.name;
-      input.required = Boolean(field.required);
+      input.name = field.name; input.required = Boolean(field.required);
+      if (field.minimum !== null && field.minimum !== undefined) input.min = field.minimum;
+      if (field.maximum !== null && field.maximum !== undefined) input.max = field.maximum;
+      input.placeholder = field.placeholder || (field.field_type === "list" ? "Comma or newline separated values" : "");
+      if (field.default !== null && field.default !== undefined) input.value = field.default;
+      if (field.help) input.title = field.help;
       label.appendChild(input);
     }
     root.appendChild(label);
-  });
-  $("#dangerConfirm").classList.toggle("hidden", !config.danger);
+  }
+  $("#dangerConfirm").classList.toggle("hidden", !config.destructive);
   $("#authorizedCheck").checked = false;
+  $("#executeAction").textContent = config.long_running ? "Queue operation" : "Execute operation";
 }
 
 function formPayload() {
-  const action = $("#actionSelect").value;
-  const config = ACTIONS[action];
+  const config = operation($("#actionSelect").value);
   const payload = {};
-  for (const field of config.fields) {
+  for (const field of config?.fields || []) {
     const input = $(`[name="${field.name}"]`, $("#dynamicFields"));
-    let value;
-    if (field.type === "checkbox") value = input.checked;
-    else value = input.value.trim();
-    if (field.required && !value) throw new Error(`${field.label} is required.`);
-    if (field.type === "number" && value !== "") value = Number(value);
-    if (["files", "packages", "remote_paths", "filters"].includes(field.name)) value = value ? value.split(",").map(item => item.trim()).filter(Boolean) : [];
-    if (field.name === "system") value = value === "" ? null : value === "true";
-    if (field.name === "replacement_pairs") {
-      value = value ? value.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
-        const splitAt = line.lastIndexOf(" ");
-        if (splitAt < 1) throw new Error("Each replacement line must use: APK_PATH PACKAGE");
-        return {file:line.slice(0, splitAt).trim(), package:line.slice(splitAt + 1).trim()};
-      }) : [];
-      if (value.length) payload.replacements = value;
-      continue;
-    }
+    let value = field.field_type === "boolean" ? input.checked : input.value.trim();
+    if (field.required && (value === "" || value === null || value === undefined)) throw new Error(`${field.label} is required.`);
+    if (field.field_type === "number" && value !== "") value = Number(value);
+    if (field.field_type === "list") value = value ? value.split(/[\r\n,]+/).map(item => item.trim()).filter(Boolean) : [];
     if (value !== "" && value !== null) payload[field.name] = value;
   }
   return payload;
@@ -209,130 +289,208 @@ function formPayload() {
 
 async function executeForm() {
   const action = $("#actionSelect").value;
-  const config = ACTIONS[action];
-  if (config.danger && !$("#authorizedCheck").checked) return toast("Confirm that the target is authorized.", true);
+  const config = operation(action);
+  if (!config) return;
+  if (config.destructive && !$("#authorizedCheck").checked) return toast("Confirm that the target is authorized.", true);
   try {
     const payload = formPayload();
-    if (action === "replace" && !payload.replacements?.length && !(payload.package && payload.file)) {
-      throw new Error("Provide Package + APK path, or one or more replacement pairs.");
-    }
-    await execute(action, payload, config.danger ? "AUTHORIZED" : null);
-  }
-  catch (error) { setOutput({ok:false, error:error.message}); toast(error.message, true); }
+    const confirmation = config.destructive ? "AUTHORIZED" : null;
+    if (config.long_running) await submitJob(action, payload, confirmation);
+    else await execute(action, payload, confirmation);
+  } catch (error) { setOutput({ok:false, error:error.message}); toast(error.message, true); }
 }
 
 function presetAction(action) {
-  if (!ACTIONS[action]) return;
-  $("#actionSelect").value = action;
-  renderActionForm(action);
-  switchView("operations");
+  if (!state.operations.has(action)) return;
+  $("#actionSelect").value = action; renderActionForm(action); switchView("operations");
 }
 
 async function loadPackages() {
-  try {
-    const data = await execute("packages", {include_paths:$("#includePaths").checked});
-    state.packages = data;
-    renderPackages();
-  } catch (error) { toast(error.message, true); }
+  try { state.packages = await execute("packages", {include_paths:$("#includePaths").checked}); renderPackages(); }
+  catch (error) { toast(error.message, true); }
 }
-
 function renderPackages() {
   const term = $("#packageSearch").value.toLowerCase();
-  const rows = state.packages.filter(item => item.name.toLowerCase().includes(term));
+  const direction = $("#packageSort").value === "desc" ? -1 : 1;
+  state.packagePageSize = Number($("#packagePageSize").value || 50);
+  const rows = state.packages
+    .filter(item => item.name.toLowerCase().includes(term))
+    .sort((left, right) => left.name.localeCompare(right.name) * direction);
+  const pages = Math.max(1, Math.ceil(rows.length / state.packagePageSize));
+  state.packagePage = Math.max(1, Math.min(state.packagePage, pages));
+  const start = (state.packagePage - 1) * state.packagePageSize;
+  const visible = rows.slice(start, start + state.packagePageSize);
   $("#packageList").classList.toggle("empty-state", rows.length === 0);
-  $("#packageList").innerHTML = rows.length ? rows.map(item => `<div class="package-item" data-package="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong>${item.apk_paths?.length ? `<small>${escapeHtml(item.apk_paths.join(" · "))}</small>` : ""}</div>`).join("") : "No matching packages.";
-  $$(".package-item").forEach(item => item.addEventListener("click", () => { presetAction("app"); $('[name="package"]').value = item.dataset.package; }));
+  $("#packageList").innerHTML = visible.length ? visible.map(item => `<div class="package-item" data-package="${escapeHtml(item.name)}"><strong>${escapeHtml(item.name)}</strong>${item.apk_paths?.length ? `<small>${escapeHtml(item.apk_paths.join(" · "))}</small>` : ""}</div>`).join("") : "No matching packages.";
+  $("#packagePageLabel").textContent = rows.length ? `Page ${state.packagePage} of ${pages} · ${rows.length} packages` : "Page 0 of 0";
+  $("#packagePrev").disabled = state.packagePage <= 1 || rows.length === 0;
+  $("#packageNext").disabled = state.packagePage >= pages || rows.length === 0;
+  $$(".package-item").forEach(item => item.addEventListener("click", () => { presetAction("app"); const input = $('[name="package"]'); if (input) input.value = item.dataset.package; }));
 }
 
 async function uploadFile(file) {
   if (!file) return;
-  const form = new FormData();
-  form.append("file", file);
+  const form = new FormData(); form.append("file", file);
   $("#uploadResult").textContent = `Uploading ${file.name}…`;
   try {
-    const response = await fetch("/api/upload", {method:"POST", credentials:"same-origin", body:form});
-    const data = await response.json();
-    if (!response.ok || data.ok === false) throw new Error(data.detail || data.error || "Upload failed");
-    state.uploads.push(data.path);
-    $("#uploadResult").textContent = `${data.path} · ${formatBytes(data.size)}`;
-    toast("File staged in local workspace");
-  } catch (error) { $("#uploadResult").textContent = error.message; toast(error.message, true); }
+    const data = await api("/api/upload", {method:"POST", body:form});
+    state.uploads.push(data.path); $("#uploadResult").textContent = `${data.path} · ${formatBytes(data.size)} · SHA-256 ${data.sha256}`;
+    toast("File staged in local workspace"); await loadArtifacts(); return data;
+  } catch (error) { $("#uploadResult").textContent = error.message; toast(error.message, true); return null; }
+}
+
+async function uploadFiles(files) {
+  const queue = [...(files || [])];
+  if (!queue.length) return;
+  const completed = []; const failed = [];
+  for (const file of queue) {
+    const result = await uploadFile(file);
+    (result ? completed : failed).push(file.name);
+  }
+  $("#uploadResult").textContent = `${completed.length} staged${failed.length ? ` · ${failed.length} failed: ${failed.join(", ")}` : `: ${completed.join(", ")}`}`;
+}
+
+function renderLiveLogs() {
+  if (state.logsPaused) return;
+  $("#liveConsole").textContent = state.logLines.length ? `${state.logLines.join("\n")}\n` : "Live output will appear here.";
+  $("#liveConsole").scrollTop = $("#liveConsole").scrollHeight;
+}
+
+function toggleLogPause() {
+  state.logsPaused = !state.logsPaused;
+  $("#pauseLogs").textContent = state.logsPaused ? "Resume" : "Pause";
+  if (!state.logsPaused) renderLiveLogs();
+  toast(state.logsPaused ? "Log rendering paused; collection continues" : "Log rendering resumed");
+}
+
+function bookmarkLog() {
+  if (!state.logLines.length) return toast("No log lines to bookmark.", true);
+  state.logBookmarks.push({line:state.logLines.length, text:state.logLines.at(-1), createdAt:new Date().toISOString()});
+  renderLogBookmarks();
+}
+
+function renderLogBookmarks() {
+  const root = $("#logBookmarks");
+  root.classList.toggle("empty-state", state.logBookmarks.length === 0);
+  root.innerHTML = state.logBookmarks.length ? state.logBookmarks.map(item => `<div class="bookmark-item"><strong>Line ${item.line}</strong><code>${escapeHtml(item.text)}</code><small>${escapeHtml(item.createdAt)}</small></div>`).join("") : "No log bookmarks.";
+}
+
+function exportLogs() {
+  if (!state.logLines.length) return toast("No log lines to export.", true);
+  const header = `# ADB-Gath local logcat export\n# Exported: ${new Date().toISOString()}\n# Device: ${selectedDevice() || "auto"}\n`;
+  const blob = new Blob([header, state.logLines.join("\n"), "\n"], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = `adbgath-logcat-${Date.now()}.log`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function startLogs() {
   if (state.socket) state.socket.close();
+  state.logLines = []; state.logBookmarks = []; state.logsPaused = false; renderLogBookmarks();
   const params = new URLSearchParams();
   if (selectedDevice()) params.set("device", selectedDevice());
   if ($("#logPackage").value.trim()) params.set("package", $("#logPackage").value.trim());
   if ($("#logRegex").value.trim()) params.set("regex", $("#logRegex").value.trim());
   params.set("format", $("#logFormat").value);
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(`${protocol}//${location.host}/ws/logs?${params}`);
-  state.socket = socket;
-  $("#liveConsole").textContent = "Connecting to logcat…\n";
-  $("#startLogs").disabled = true; $("#stopLogs").disabled = false;
+  const socket = new WebSocket(`${protocol}//${location.host}/ws/logs?${params}`); state.socket = socket;
+  $("#liveConsole").textContent = "Connecting to logcat…\n"; $("#startLogs").disabled = true; $("#stopLogs").disabled = false;
+  $("#pauseLogs").disabled = false; $("#bookmarkLog").disabled = false; $("#exportLogs").disabled = false; $("#pauseLogs").textContent = "Pause";
   socket.onmessage = event => {
-    const data = JSON.parse(event.data);
-    $("#liveConsole").textContent += data.line ? `${data.line}\n` : `[error] ${data.error}\n`;
-    $("#liveConsole").scrollTop = $("#liveConsole").scrollHeight;
+    const data = JSON.parse(event.data); const line = data.line || `[error] ${data.error}`;
+    state.logLines.push(line);
+    if (state.logLines.length > MAX_LOG_LINES) {
+      const removed = state.logLines.length - MAX_LOG_LINES; state.logLines.splice(0, removed);
+      state.logBookmarks = state.logBookmarks.map(item => ({...item, line:item.line-removed})).filter(item => item.line > 0);
+      renderLogBookmarks();
+    }
+    renderLiveLogs();
   };
   socket.onerror = () => toast("Log stream connection failed", true);
-  socket.onclose = () => { state.socket = null; $("#startLogs").disabled = false; $("#stopLogs").disabled = true; };
+  socket.onclose = () => { state.socket = null; $("#startLogs").disabled = false; $("#stopLogs").disabled = true; $("#pauseLogs").disabled = true; };
 }
-
 function stopLogs() { if (state.socket) state.socket.close(); }
 
 async function runSecurity(mode = "security") {
   try {
-    const result = await execute(mode, {});
-    const report = mode === "security" ? result : result.security;
-    renderFindings(report);
-    switchView("security");
+    if (state.longRunning.has(mode)) { await submitJob(mode, {}); return; }
+    const result = await execute(mode, {}); renderFindings(mode === "security" ? result : result.security); switchView("security");
   } catch (error) { toast(error.message, true); }
 }
-
 function renderFindings(report) {
-  const summary = report?.summary || {};
-  const categories = [["total","TOTAL"],["high","HIGH"],["medium","MEDIUM"],["low","LOW"],["info","INFO"]];
+  const summary = report?.summary || {}; const categories = [["total","TOTAL"],["critical","CRITICAL"],["high","HIGH"],["medium","MEDIUM"],["low","LOW"],["info","INFO"]];
   $("#findingSummary").innerHTML = categories.map(([key,label]) => `<article class="metric"><span>${label}</span><strong>${summary[key] ?? 0}</strong></article>`).join("");
-  const findings = report?.findings || [];
-  const root = $("#findings");
-  root.classList.toggle("empty-state", findings.length === 0);
-  root.innerHTML = findings.length ? findings.map(finding => `<article class="finding ${escapeHtml(finding.severity)}"><div class="finding-head"><strong>${escapeHtml(finding.title)}</strong><span class="severity">${escapeHtml(finding.severity.toUpperCase())}</span></div><p><b>Evidence:</b> <code>${escapeHtml(finding.evidence)}</code></p><p><b>Mitigation:</b> ${escapeHtml(finding.mitigation)}</p></article>`).join("") : "No findings were generated by the current checks.";
+  const chartKeys = [["critical","CRITICAL"],["high","HIGH"],["medium","MEDIUM"],["low","LOW"],["info","INFO"]];
+  const maximum = Math.max(1, ...chartKeys.map(([key]) => Number(summary[key] || 0)));
+  const chart = $("#severityChart"); chart.classList.remove("empty-state");
+  chart.innerHTML = chartKeys.map(([key,label]) => `<div class="severity-row ${key}"><span>${label}</span><div><i style="width:${(Number(summary[key] || 0) / maximum) * 100}%"></i></div><strong>${summary[key] ?? 0}</strong></div>`).join("");
+  const findings = report?.findings || []; const root = $("#findings"); root.classList.toggle("empty-state", findings.length === 0);
+  root.innerHTML = findings.length ? findings.map(finding => `<article class="finding ${escapeHtml(finding.severity)}"><div class="finding-head"><strong>${escapeHtml(finding.title)}</strong><span class="severity">${escapeHtml(String(finding.severity).toUpperCase())}</span></div><p><b>Evidence:</b> <code>${escapeHtml(finding.evidence)}</code></p><p><b>Mitigation:</b> ${escapeHtml(finding.mitigation)}</p>${finding.cwe ? `<p><b>CWE:</b> ${escapeHtml(finding.cwe)}</p>` : ""}</article>`).join("") : "No findings were generated by the current checks.";
 }
 
-function renderArtifacts() {
+async function refreshWorkspace(showToast = true) {
+  try {
+    const [projects, jobs, snapshots, findings] = await Promise.all([api("/api/projects"), api("/api/jobs"), api("/api/snapshots"), api("/api/findings")]);
+    state.projects = projects.data || []; state.jobs = jobs.data || []; state.snapshots = snapshots.data || []; state.findings = findings.data || [];
+    renderWorkspace(); if (showToast) toast("Workspace refreshed");
+  } catch (error) { if (showToast) toast(error.message, true); }
+}
+async function loadStoredFindings() { try { state.findings = (await api("/api/findings")).data || []; renderWorkspace(); } catch (_) { /* bootstrap remains usable */ } }
+function renderWorkspace() {
+  $("#projectCount").textContent = state.projects.length;
+  $("#activeJobCount").textContent = state.jobs.filter(job => ["queued","running","cancelling"].includes(job.status)).length;
+  $("#snapshotCount").textContent = state.snapshots.length; $("#storedFindingCount").textContent = state.findings.length;
+  renderDataList("#projectList", state.projects, item => `<div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.id)} · ${escapeHtml(item.scope || "No scope")}</small></div>`);
+  renderDataList("#snapshotList", state.snapshots, item => `<div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.device_serial || "device")} · ${escapeHtml(item.created_at || "")}</small></div>`);
+  renderDataList("#storedFindingList", state.findings, item => `<div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.severity)} · ${escapeHtml(item.status)}</small></div>`);
+  const jobs = $("#jobList"); jobs.classList.toggle("empty-state", state.jobs.length === 0);
+  jobs.innerHTML = state.jobs.length ? state.jobs.map(job => `<div class="data-row"><div><strong>${escapeHtml(job.action)}</strong><small>${escapeHtml(job.status)} · ${Number(job.progress || 0)}%</small><div class="job-progress"><i style="width:${Math.max(0, Math.min(100, Number(job.progress || 0)))}%"></i></div></div>${["queued","running","cancelling"].includes(job.status) ? `<button class="text-button cancel-job" data-job="${escapeHtml(job.id)}">CANCEL</button>` : `<button class="text-button inspect-job" data-job="${escapeHtml(job.id)}">VIEW</button>`}</div>`).join("") : "No jobs.";
+  $$(".cancel-job").forEach(button => button.addEventListener("click", async () => { try { await api(`/api/jobs/${encodeURIComponent(button.dataset.job)}/cancel`, {method:"POST", body:"{}"}); await refreshWorkspace(false); } catch (error) { toast(error.message, true); } }));
+  $$(".inspect-job").forEach(button => button.addEventListener("click", async () => { try { setOutput((await api(`/api/jobs/${encodeURIComponent(button.dataset.job)}`)).data); } catch (error) { toast(error.message, true); } }));
+}
+function renderDataList(selector, rows, render) {
+  const root = $(selector); root.classList.toggle("empty-state", rows.length === 0); root.innerHTML = rows.length ? rows.map(item => `<div class="data-row">${render(item)}</div>`).join("") : "No data.";
+}
+
+async function loadArtifacts() {
+  try { const rows = (await api("/api/artifacts")).data || []; state.artifacts = rows.map(item => item.path); renderArtifacts(rows); }
+  catch (_) { renderArtifacts(); }
+}
+function renderArtifacts(rows = null) {
   $("#artifactCount").textContent = state.artifacts.length;
-  const root = $("#artifactList");
-  root.classList.toggle("empty-state", state.artifacts.length === 0);
-  root.innerHTML = state.artifacts.length ? state.artifacts.map(path => `<div class="artifact-item"><code>${escapeHtml(path)}</code><a href="/api/artifact?path=${encodeURIComponent(path)}">DOWNLOAD</a></div>`).join("") : "No artifacts generated in this session.";
+  const root = $("#artifactList"); root.classList.toggle("empty-state", state.artifacts.length === 0);
+  const metadata = new Map((rows || []).map(item => [item.path, item]));
+  root.innerHTML = state.artifacts.length ? state.artifacts.map(path => { const item = metadata.get(path); return `<div class="artifact-item"><div><code>${escapeHtml(path)}</code>${item ? `<small>${formatBytes(item.size)}</small>` : ""}</div><a href="/api/artifact?path=${encodeURIComponent(path)}">DOWNLOAD</a></div>`; }).join("") : "No artifacts generated in this workspace.";
 }
-
-function escapeHtml(value) { const div = document.createElement("div"); div.textContent = String(value ?? ""); return div.innerHTML; }
-function formatBytes(bytes) { if (!bytes) return "0 B"; const units=["B","KiB","MiB","GiB"]; const i=Math.min(Math.floor(Math.log(bytes)/Math.log(1024)),units.length-1); return `${(bytes/1024**i).toFixed(i?1:0)} ${units[i]}`; }
 
 function wireEvents() {
   $$(".nav-item").forEach(item => item.addEventListener("click", () => switchView(item.dataset.view)));
   $$('[data-switch]').forEach(button => button.addEventListener("click", () => button.dataset.preset ? presetAction(button.dataset.preset) : switchView(button.dataset.switch)));
+  $$('[data-preset]:not([data-switch])').forEach(button => button.addEventListener("click", () => presetAction(button.dataset.preset)));
   $("#refreshDevices").addEventListener("click", refreshDevices);
   $("#runDoctor").addEventListener("click", async () => { try { renderDoctor(await execute("doctor", {})); } catch (error) { toast(error.message, true); } });
   $$(".clear-output").forEach(button => button.addEventListener("click", () => setOutput("Output cleared.")));
-  $("#actionSelect").innerHTML = Object.entries(ACTIONS).map(([key,config]) => `<option value="${key}">${escapeHtml(config.label)}</option>`).join("");
   $("#actionSelect").addEventListener("change", event => renderActionForm(event.target.value));
-  $("#executeAction").addEventListener("click", executeForm);
-  $("#resetForm").addEventListener("click", () => renderActionForm($("#actionSelect").value));
-  $$(".quick-action").forEach(button => button.addEventListener("click", () => button.dataset.action === "download" ? presetAction("download") : execute(button.dataset.action, {}).catch(error => toast(error.message,true))));
+  $("#executeAction").addEventListener("click", executeForm); $("#resetForm").addEventListener("click", () => renderActionForm($("#actionSelect").value));
+  $("#savePreset").addEventListener("click", saveCurrentPreset); $("#loadPreset").addEventListener("click", loadSelectedPreset); $("#deletePreset").addEventListener("click", deleteSelectedPreset);
+  $$(".quick-action").forEach(button => button.addEventListener("click", () => button.dataset.action === "download" ? presetAction("download") : (state.longRunning.has(button.dataset.action) ? submitJob(button.dataset.action, {}).catch(error => toast(error.message,true)) : execute(button.dataset.action, {}).catch(error => toast(error.message,true)))));
   $("#loadPackages").addEventListener("click", loadPackages);
-  $("#packageSearch").addEventListener("input", renderPackages);
-  $("#fileUpload").addEventListener("change", event => uploadFile(event.target.files[0]));
+  $("#packageSearch").addEventListener("input", () => { state.packagePage = 1; renderPackages(); });
+  $("#packageSort").addEventListener("change", () => { state.packagePage = 1; renderPackages(); });
+  $("#packagePageSize").addEventListener("change", () => { state.packagePage = 1; renderPackages(); });
+  $("#packagePrev").addEventListener("click", () => { state.packagePage -= 1; renderPackages(); });
+  $("#packageNext").addEventListener("click", () => { state.packagePage += 1; renderPackages(); });
+  $("#fileUpload").addEventListener("change", event => uploadFiles(event.target.files));
   const dropzone = $("#dropzone");
   ["dragenter","dragover"].forEach(name => dropzone.addEventListener(name, event => { event.preventDefault(); dropzone.classList.add("drag"); }));
   ["dragleave","drop"].forEach(name => dropzone.addEventListener(name, event => { event.preventDefault(); dropzone.classList.remove("drag"); }));
-  dropzone.addEventListener("drop", event => uploadFile(event.dataTransfer.files[0]));
+  dropzone.addEventListener("drop", event => uploadFiles(event.dataTransfer.files));
   $("#startLogs").addEventListener("click", startLogs); $("#stopLogs").addEventListener("click", stopLogs);
-  $("#clearLogs").addEventListener("click", async () => { try { await execute("logs_clear", {}); $("#liveConsole").textContent = "Device log buffer cleared.\n"; } catch (error) { toast(error.message,true); } });
-  $("#runSecurity").addEventListener("click", () => runSecurity("security"));
-  $("#runMastg").addEventListener("click", () => runSecurity("mastg"));
+  $("#pauseLogs").addEventListener("click", toggleLogPause); $("#bookmarkLog").addEventListener("click", bookmarkLog); $("#exportLogs").addEventListener("click", exportLogs);
+  $("#clearLogs").addEventListener("click", async () => { try { await execute("logs_clear", {}, "AUTHORIZED"); state.logLines = []; state.logBookmarks = []; renderLogBookmarks(); $("#liveConsole").textContent = "Device log buffer cleared.\n"; } catch (error) { toast(error.message,true); } });
+  $("#runSecurity").addEventListener("click", () => runSecurity("security")); $("#runMastg").addEventListener("click", () => runSecurity("mastg"));
+  $("#refreshWorkspace").addEventListener("click", () => refreshWorkspace(true));
 }
 
-document.addEventListener("DOMContentLoaded", () => { wireEvents(); renderActionForm("devices"); bootstrap(); });
+document.addEventListener("DOMContentLoaded", () => { wireEvents(); renderPresetSelect(); renderLogBookmarks(); bootstrap(); });

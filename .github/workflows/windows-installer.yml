@@ -1,0 +1,41 @@
+name: windows-installer-smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "installers/windows/**"
+      - "src/**"
+      - "pyproject.toml"
+      - ".github/workflows/windows-installer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  clean-user-install:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run current-user installer
+        shell: powershell
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "adbgath-install"
+          & .\installers\windows\install.ps1 -InstallRoot $root -SkipFrida -SkipBundletool -NoPathChanges -Force
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $root "bin\adbgath.cmd") --version
+          & (Join-Path $root "bin\adbgath.cmd") --json doctor
+          & (Join-Path $root "bin\adbgath-web.cmd") --help
+      - name: Repair installation
+        shell: powershell
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "adbgath-install"
+          & .\installers\windows\install.ps1 -InstallRoot $root -SkipFrida -SkipBundletool -NoPathChanges -Repair
+          & (Join-Path $root "bin\adbgath.cmd") --version
+      - name: Uninstall without touching unrelated user data
+        shell: powershell
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "adbgath-install"
+          & .\installers\windows\uninstall.ps1 -InstallRoot $root
+          if (Test-Path $root) { throw "Installer root still exists after uninstall." }

@@ -2,14 +2,36 @@
 param(
     [switch]$SkipPlatformTools,
     [switch]$SkipFrida,
-    [switch]$Force
+    [switch]$SkipBundletool,
+    [switch]$Force,
+    [switch]$Repair,
+    [switch]$NoPathChanges,
+    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\adbgath"),
+    [string]$OfflineCache,
+    [string]$Proxy
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+if ($OfflineCache) { $OfflineCache = [System.IO.Path]::GetFullPath($OfflineCache) }
+
 function Write-Step([string]$Message) {
     Write-Host "[adbgath] $Message" -ForegroundColor Cyan
+}
+
+function Get-VerifiedDownload([string]$Uri, [string]$Destination, [string]$OfflineName = "") {
+    if ($OfflineCache) {
+        $name = if ($OfflineName) { $OfflineName } else { Split-Path $Destination -Leaf }
+        $cached = Join-Path $OfflineCache $name
+        if (-not (Test-Path $cached)) { throw "Offline dependency not found: $cached" }
+        Copy-Item $cached $Destination -Force
+        return
+    }
+    $arguments = @{ Uri = $Uri; OutFile = $Destination; UseBasicParsing = $true }
+    if ($Proxy) { $arguments.Proxy = $Proxy }
+    Invoke-WebRequest @arguments
 }
 
 function Test-Python311([string]$Executable, [string[]]$PrefixArgs = @()) {
@@ -59,7 +81,7 @@ function Resolve-Python {
 
 function Install-Python {
     Write-Step "Python 3.11+ was not found. Installing Python 3.12 for the current user."
-    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+    $winget = if ($OfflineCache) { $null } else { Get-Command winget.exe -ErrorAction SilentlyContinue }
     if ($winget) {
         & $winget.Source install --exact --id Python.Python.3.12 --scope user --silent --accept-package-agreements --accept-source-agreements
         if ($LASTEXITCODE -ne 0) { Write-Warning "WinGet Python installation returned $LASTEXITCODE; trying the official installer." }
@@ -73,8 +95,8 @@ function Install-Python {
     }
     $installerUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-$installerArch.exe"
     $installer = Join-Path $env:TEMP "python-3.12.10-$installerArch.exe"
-    Write-Step "Downloading the official Python installer."
-    Invoke-WebRequest -Uri $installerUrl -OutFile $installer -UseBasicParsing
+    Write-Step "Obtaining the official Python installer."
+    Get-VerifiedDownload $installerUrl $installer (Split-Path $installer -Leaf)
     $signature = Get-AuthenticodeSignature -FilePath $installer
     if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "Python Software Foundation") {
         Remove-Item $installer -Force -ErrorAction SilentlyContinue
@@ -114,8 +136,8 @@ function Install-PlatformTools([string]$InstallRoot) {
     }
     $zip = Join-Path $env:TEMP "platform-tools-latest-windows.zip"
     $extractRoot = Join-Path $env:TEMP ("adbgath-platform-tools-" + [Guid]::NewGuid().ToString("N"))
-    Write-Step "Downloading Android SDK Platform-Tools from Google."
-    Invoke-WebRequest -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile $zip -UseBasicParsing
+    Write-Step "Obtaining Android SDK Platform-Tools from Google or the offline cache."
+    Get-VerifiedDownload "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" $zip "platform-tools-latest-windows.zip"
     New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
     Expand-Archive -Path $zip -DestinationPath $extractRoot -Force
     $source = Join-Path $extractRoot "platform-tools"
@@ -127,8 +149,61 @@ function Install-PlatformTools([string]$InstallRoot) {
     return $platformRoot
 }
 
+function Ensure-Java {
+    $java = Get-Command java.exe -ErrorAction SilentlyContinue
+    if ($java) { return $java.Source }
+    if ($OfflineCache) {
+        Write-Warning "Java is not present. Place a supported Java runtime on PATH before using bundletool."
+        return $null
+    }
+    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Step "Installing Microsoft OpenJDK 21 for bundletool."
+        & $winget.Source install --exact --id Microsoft.OpenJDK.21 --scope user --silent --accept-package-agreements --accept-source-agreements
+        $java = Get-Command java.exe -ErrorAction SilentlyContinue
+        if ($java) { return $java.Source }
+    }
+    Write-Warning "Java could not be installed automatically. bundletool will remain optional until Java is available."
+    return $null
+}
+
+function Install-Bundletool([string]$Root) {
+    $tools = Join-Path $Root "tools"
+    New-Item -ItemType Directory -Path $tools -Force | Out-Null
+    $jar = Join-Path $tools "bundletool.jar"
+    if ((Test-Path $jar) -and -not $Force) { return $jar }
+    if ($OfflineCache) {
+        $cachedJar = Join-Path $OfflineCache "bundletool.jar"
+        $cachedHash = Join-Path $OfflineCache "bundletool.jar.sha256"
+        if (-not (Test-Path $cachedJar) -or -not (Test-Path $cachedHash)) {
+            throw "Offline bundletool requires bundletool.jar and bundletool.jar.sha256."
+        }
+        Copy-Item $cachedJar $jar -Force
+        $expected = ((Get-Content $cachedHash -Raw).Trim() -split '\s+')[0]
+        $actual = (Get-FileHash $jar -Algorithm SHA256).Hash
+        if ($actual -ine $expected) { Remove-Item $jar -Force; throw "Offline bundletool checksum verification failed." }
+        return $jar
+    }
+    Write-Step "Resolving the latest official Google bundletool release."
+    $headers = @{ "User-Agent" = "ADB-Gath-Installer"; "Accept" = "application/vnd.github+json" }
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/google/bundletool/releases/latest" -Headers $headers
+    $asset = $release.assets | Where-Object { $_.name -match '^bundletool-all-.*\.jar$' } | Select-Object -First 1
+    if (-not $asset) { throw "The official bundletool release did not contain the expected JAR." }
+    if ($asset.browser_download_url -notmatch '^https://github.com/google/bundletool/releases/download/') {
+        throw "Unexpected bundletool download origin."
+    }
+    Get-VerifiedDownload $asset.browser_download_url $jar $asset.name
+    $actual = (Get-FileHash $jar -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($asset.digest -and $asset.digest -match '^sha256:(.+)$' -and $actual -ne $Matches[1].ToLowerInvariant()) {
+        Remove-Item $jar -Force
+        throw "Official bundletool release digest verification failed."
+    }
+    Set-Content -Path "$jar.sha256" -Value "$actual  bundletool.jar" -Encoding ASCII
+    return $jar
+}
+
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\adbgath"
+$InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 $VenvRoot = Join-Path $InstallRoot "venv"
 $BinRoot = Join-Path $InstallRoot "bin"
 
@@ -139,7 +214,7 @@ $python = Resolve-Python
 if (-not $python) { $python = Install-Python }
 Write-Step "Using Python: $($python.Exe) $($python.Args -join ' ')"
 
-if ((Test-Path $VenvRoot) -and $Force) { Remove-Item $VenvRoot -Recurse -Force }
+if ((Test-Path $VenvRoot) -and $Force -and -not $Repair) { Remove-Item $VenvRoot -Recurse -Force }
 if (-not (Test-Path (Join-Path $VenvRoot "Scripts\python.exe"))) {
     Write-Step "Creating an isolated Python environment."
     $venvArgs = @($python.Args) + @("-m", "venv", $VenvRoot)
@@ -149,39 +224,63 @@ if (-not (Test-Path (Join-Path $VenvRoot "Scripts\python.exe"))) {
 
 $VenvPython = Join-Path $VenvRoot "Scripts\python.exe"
 Write-Step "Installing adbgath and web dependencies."
-& $VenvPython -m pip install --disable-pip-version-check --upgrade pip setuptools wheel
-if ($LASTEXITCODE -ne 0) { throw "Unable to update Python packaging tools." }
-& $VenvPython -m pip install --disable-pip-version-check --upgrade $ProjectRoot
+$PipSourceArgs = @()
+if ($OfflineCache) { $PipSourceArgs = @("--no-index", "--find-links", $OfflineCache) }
+if (-not $OfflineCache) {
+    & $VenvPython -m pip install --disable-pip-version-check --upgrade pip setuptools wheel
+    if ($LASTEXITCODE -ne 0) { throw "Unable to update Python packaging tools." }
+}
+& $VenvPython -m pip install --disable-pip-version-check @PipSourceArgs --upgrade $ProjectRoot
 if ($LASTEXITCODE -ne 0) { throw "Unable to install adbgath Python dependencies." }
 if (-not $SkipFrida) {
     Write-Step "Installing optional Frida command-line tools."
-    & $VenvPython -m pip install --disable-pip-version-check --upgrade "frida-tools>=13"
+    & $VenvPython -m pip install --disable-pip-version-check @PipSourceArgs --upgrade "frida-tools>=13"
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Frida tools could not be installed. Core CLI and web features remain available; rerun with a compatible Python version to enable Frida."
     }
 }
 
 $PlatformRoot = $null
+$BundletoolJar = $null
 if (-not $SkipPlatformTools) {
     $PlatformRoot = Install-PlatformTools $InstallRoot
-    Add-UserPath $PlatformRoot
-    [Environment]::SetEnvironmentVariable("ADB_PATH", (Join-Path $PlatformRoot "adb.exe"), "User")
+    if (-not $NoPathChanges) { Add-UserPath $PlatformRoot }
+    if (-not $NoPathChanges) { [Environment]::SetEnvironmentVariable("ADB_PATH", (Join-Path $PlatformRoot "adb.exe"), "User") }
     $env:ADB_PATH = Join-Path $PlatformRoot "adb.exe"
+}
+
+if (-not $SkipBundletool) {
+    try {
+        $JavaExe = Ensure-Java
+        $BundletoolJar = Install-Bundletool $InstallRoot
+        if (-not $NoPathChanges) { [Environment]::SetEnvironmentVariable("BUNDLETOOL_JAR", $BundletoolJar, "User") }
+        $env:BUNDLETOOL_JAR = $BundletoolJar
+    } catch {
+        Write-Warning "bundletool could not be installed securely: $($_.Exception.Message)"
+    }
 }
 
 $AdbgathExe = Join-Path $VenvRoot "Scripts\adbgath.exe"
 $WebExe = Join-Path $VenvRoot "Scripts\adbgath-web.exe"
+$AdbCmd = if ($PlatformRoot) { 'set "ADB_PATH=' + (Join-Path $PlatformRoot "adb.exe") + '"' } else { "rem ADB_PATH inherited from environment" }
+$BundleCmd = if ($BundletoolJar) { 'set "BUNDLETOOL_JAR=' + $BundletoolJar + '"' } else { "rem BUNDLETOOL_JAR inherited from environment" }
 @"
 @echo off
+set "ADBGATH_HOME=$InstallRoot"
+$AdbCmd
+$BundleCmd
 "$AdbgathExe" %*
 "@ | Set-Content -Path (Join-Path $BinRoot "adbgath.cmd") -Encoding ASCII
 @"
 @echo off
+set "ADBGATH_HOME=$InstallRoot"
+$AdbCmd
+$BundleCmd
 "$WebExe" %*
 "@ | Set-Content -Path (Join-Path $BinRoot "adbgath-web.cmd") -Encoding ASCII
 
-Add-UserPath $BinRoot
-[Environment]::SetEnvironmentVariable("ADBGATH_HOME", $InstallRoot, "User")
+if (-not $NoPathChanges) { Add-UserPath $BinRoot }
+if (-not $NoPathChanges) { [Environment]::SetEnvironmentVariable("ADBGATH_HOME", $InstallRoot, "User") }
 $env:ADBGATH_HOME = $InstallRoot
 
 Write-Step "Validating the installed commands."
@@ -198,4 +297,8 @@ Write-Host "Install root : $InstallRoot"
 Write-Host "CLI          : adbgath"
 Write-Host "Web UI       : adbgath web"
 Write-Host "Validation   : adbgath doctor"
-Write-Host "A new terminal will inherit the updated user PATH automatically."
+if ($NoPathChanges) {
+    Write-Host "Portable/no-PATH mode: run $BinRoot\adbgath.cmd"
+} else {
+    Write-Host "A new terminal will inherit the updated user PATH automatically."
+}

@@ -36,6 +36,16 @@ class FakeAdb:
         yield "07-11 12:00:00.000  100  100 I Test: hello"
         yield "07-11 12:00:01.000  100  100 E Test: exception"
 
+    def run_binary(self, args, *, serial=None, timeout=None, check=True):
+        del timeout, check
+        args = list(args)
+        self.calls.append((args, serial))
+        return CommandResult(
+            ok=True,
+            command=self.build(args, serial=serial),
+            metadata={"bytes": b"\x89PNG\r\n\x1a\nFAKE"},
+        )
+
     def run(self, args, *, serial=None, timeout=None, check=True, cwd=None):
         del timeout, check, cwd
         args = list(args)
@@ -95,6 +105,11 @@ class FakeAdb:
             stdout = "USER PID NAME\nu0_a1 100 com.example.app\n"
         elif args[:3] == ["shell", "pidof", "com.example.app"]:
             stdout = "100\n"
+        elif args and args[0] == "bugreport":
+            destination = Path(args[-1])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(b"PK\x03\x04FAKE-BUGREPORT")
+            stdout = "Bug report copied\n"
         elif args and args[0] == "pull":
             destination = Path(args[-1])
             destination.parent.mkdir(parents=True, exist_ok=True)

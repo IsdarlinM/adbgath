@@ -1,97 +1,120 @@
 # adbgath
 
 ```text
-╭──────────────────────────────────────────────────────────────────────────────╮
-│  ADB-GATH  ::  Defensive Android Assessment Toolkit  ::  v3.0.0             │
-│  Cross-platform CLI + local security-focused web workspace                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+ █████╗ ██████╗ ██████╗       ██████╗  █████╗ ████████╗██╗  ██╗███████╗██████╗ 
+██╔══██╗██╔══██╗██╔══██╗     ██╔════╝ ██╔══██╗╚══██╔══╝██║  ██║██╔════╝██╔══██╗
+███████║██║  ██║██████╔╝█████╗██║  ███╗███████║   ██║   ███████║█████╗  ██████╔╝
+██╔══██║██║  ██║██╔══██╗╚════╝██║   ██║██╔══██║   ██║   ██╔══██║██╔══╝  ██╔══██╗
+██║  ██║██████╔╝██████╔╝      ╚██████╔╝██║  ██║   ██║   ██║  ██║███████╗██║  ██║
+╚═╝  ╚═╝╚═════╝ ╚═════╝        ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+
+ADB-Gath
+Defensive ADB Toolkit
+ADB-Gathering
+Developer: IsdarlinM | Version: 3.2.9
+Threat intel • Device forensics • Defensive ADB workflow
 ```
 
-**adbgath** is a cross-platform defensive Android assessment toolkit for authorized mobile testing. Version 3 replaces the Linux-only Bash core with a Python service layer that runs natively on Windows and Linux, while preserving the main ADB workflows and exposing the same capabilities through a professional local web interface.
+**adbgath 3.2.9** is a cross-platform Android assessment and evidence workspace for authorized security testing. It provides a native Windows and Linux CLI, a professional web UI, persistent projects, reproducible evidence, static and device-side analysis, multi-device workflows, and secure update/rollback support.
 
-The project does not include prebuilt executables or Android binaries. The installers create the Python environment, install dependencies, download official Android SDK Platform-Tools when needed, generate launchers, and configure the user `PATH`.
+The CLI and web interface use the same Python service layer and shared operation catalog. A capability added to the catalog is therefore validated and exposed consistently across Windows, Linux, CLI, and Web UI.
 
-## Highlights
+> Use adbgath only on devices, applications, accounts, and environments you own or are explicitly authorized to test.
 
-- Native Windows and Linux CLI with the global `adbgath` command.
-- Local web workspace with device selection, user/profile selection, structured command forms, live logcat, package inventory, audit findings, uploads, and artifact downloads.
-- Shared execution layer: CLI and web UI call the same validated Python services.
-- Safe subprocess execution: no `shell=True`, no browser-accessible arbitrary terminal, and allowlisted web actions.
-- USB and wireless debugging support.
-- APK download, install, uninstall, replacement, and local static metadata/hash checks.
-- Device, user/profile, package, runtime, network, proxy, and content-provider inspection.
-- Timed and live logcat workflows with package, PID, format, and regular-expression filtering.
-- Rooted-device `tcpdump` capture support.
-- Optional Frida integration.
-- JSON and Markdown posture reports plus OWASP MASTG-oriented evidence bundles.
-- Windows/Linux CI matrix and fake-ADB automated tests.
+## What 3.2.9 adds
+
+- Native Windows and Linux operation without Bash-dependent core logic.
+- Owner-approved ADB-Gath branding restored and protected by regression tests.
+- Transactional application replacement with APK backup and rollback.
+- APK, split APK, `.apks`, and optional Android App Bundle workflows.
+- Static Android attack-surface analysis for manifest components, deep links, permissions, cleartext policy, backup policy, WebView indicators, signing, native libraries, endpoints, and embedded-secret indicators.
+- Persistent SQLite projects, sessions, findings, artifacts, snapshots, groups, and background jobs.
+- Evidence capture with screenshots, bugreports, dumpsys data, logcat, APK sets, SHA-256 hashes, redacted copies, and optional HMAC-signed manifests.
+- Snapshot comparison for device/application state changes.
+- Concurrent read-only execution across named device groups.
+- Report export to JSON, Markdown, HTML, CSV, SARIF, and PDF.
+- Controlled, versioned Frida observation scripts with syntax validation, redacted session logs, and persistent history.
+- Permission-declaring plugin API with explicit operator approval.
+- Local web UI by default, with optional TLS-only authenticated remote mode.
+- Secure local ZIP update workflow with checksum validation, path/type limits, preserved data, smoke testing, automatic restoration, and rollback.
+- Windows/Linux portable and offline-capable installation modes.
+- Project ZIP export with metadata, findings, sessions, snapshots, artifact hashes, and workspace-confined evidence.
+- Saved local operation presets, package sorting/pagination, multi-file staging, bounded logcat rendering, bookmarks, export, and severity visualization in the Web UI.
+
+## Architecture
+
+```text
+Windows CLI ───────┐
+Linux CLI ─────────┼── Shared operation catalog ── AdbgathService ── AdbClient ── adb/adb.exe
+Web UI + Jobs ─────┘                    │
+                                       ├── Projects / SQLite
+                                       ├── Rules / Plugins
+                                       ├── Evidence / Reports
+                                       └── APK / Bundle analysis
+```
+
+Host commands are executed as argument arrays with `shell=False`. The browser has no arbitrary shell or arbitrary ADB endpoint.
 
 ## Requirements
 
-The installers handle the required host dependencies:
+Required:
 
 - Python 3.11 or newer.
 - Android SDK Platform-Tools (`adb`).
-- Python web dependencies.
-- Optional Frida tools unless installation is explicitly skipped.
+- An authorized Android device or emulator with USB or Wireless Debugging enabled.
 
-Device requirements:
+Optional:
 
-- Android device or emulator with USB Debugging or Wireless Debugging enabled.
-- User approval of the ADB RSA prompt.
-- Root or a working `su` command only for packet capture.
-- `tcpdump` on the device, or a compatible binary supplied with `sniff push-tcpdump`.
+- Java and `bundletool` for AAB/APKS build, device-spec, and install workflows.
+- `aapt`, `aapt2`, `apkanalyzer`, and `apksigner` for richer static metadata.
+- Frida tools for controlled runtime observation.
+- Root and `tcpdump` for device-side packet capture.
+
+The installers can provision the required host dependencies. No executables, APKs, JARs, PCAPs, or other platform binaries are committed to this repository.
 
 ## Windows installation
 
-Open **Command Prompt** or **Windows Terminal** in the repository directory and run:
+From Command Prompt or Windows Terminal:
 
 ```bat
 installers\windows\install.cmd
 ```
 
-The installer:
-
-1. Detects Python 3.11+.
-2. Installs Python 3.12 for the current user through WinGet, with an official Python installer fallback.
-3. Creates an isolated virtual environment under `%LOCALAPPDATA%\Programs\adbgath`.
-4. Installs adbgath, FastAPI/Uvicorn, upload support, and Frida tools.
-5. Downloads the official latest Android SDK Platform-Tools archive from Google.
-6. Generates `adbgath.cmd` and `adbgath-web.cmd` launchers.
-7. Adds the launcher and Platform-Tools directories to the user `PATH`.
-8. Sets `ADB_PATH` and `ADBGATH_HOME` for the current user.
-9. Validates both `adbgath` and `adb`.
-
 Open a new terminal after installation:
 
 ```bat
 adbgath --version
-adbgath doctor
+adbgath doctor --fix
 adbgath devices
 adbgath web
 ```
 
-Optional installer switches:
+Useful installer modes:
 
 ```bat
-installers\windows\install.cmd -SkipFrida
-installers\windows\install.cmd -SkipPlatformTools
+installers\windows\install.cmd -Repair
 installers\windows\install.cmd -Force
+installers\windows\install.cmd -SkipFrida
+installers\windows\install.cmd -SkipBundletool
+installers\windows\install.cmd -SkipPlatformTools
+installers\windows\install.cmd -OfflineCache "D:\adbgath-cache"
+installers\windows\install.cmd -Proxy "http://proxy.example:8080"
 ```
 
-Uninstall:
+Portable installation without persistent environment changes:
 
 ```bat
-installers\windows\uninstall.cmd
+installers\windows\portable.cmd
+portable-adbgath\bin\adbgath.cmd doctor
 ```
 
-Preserve the workspace during uninstall:
+Uninstall while preserving projects/evidence:
 
 ```bat
 installers\windows\uninstall.cmd -KeepWorkspace
 ```
 
-See [Windows installation details](docs/WINDOWS.md) and the [quick start](docs/QUICKSTART.md).
+See [`docs/WINDOWS.md`](docs/WINDOWS.md).
 
 ## Linux installation
 
@@ -100,307 +123,345 @@ chmod +x installers/linux/install.sh
 ./installers/linux/install.sh
 ```
 
-The installer detects `apt`, `dnf`, `pacman`, or `zypper`, installs Python/venv/ADB when missing, creates an isolated environment, installs the package, and adds `$HOME/.local/bin` to common shell startup files.
-
-```bash
-adbgath doctor
-adbgath devices
-adbgath web
-```
-
-Skip optional Frida tooling:
+Options:
 
 ```bash
 ./installers/linux/install.sh --skip-frida
+./installers/linux/install.sh --skip-bundletool
+./installers/linux/install.sh --offline-cache /media/cache
+./installers/linux/install.sh --proxy http://proxy.example:8080
+./installers/linux/install.sh --force
 ```
 
-## Web interface
+Portable mode:
 
-Start the web workspace:
+```bash
+./installers/linux/portable.sh ./portable-adbgath
+./portable-adbgath/bin/adbgath doctor
+```
+
+## Web UI
+
+Start locally:
 
 ```bash
 adbgath web
 ```
 
-Default address:
+Default URL:
 
 ```text
 http://127.0.0.1:8765
 ```
 
-Use a custom local port:
+The local interface includes:
+
+- Device and Android profile selection.
+- Capability and dependency diagnostics.
+- Dynamic forms generated from the shared operation catalog.
+- Package/APK workspace with sorting, pagination, secure multi-file uploads, and local browser presets.
+- Live WebSocket logcat with a bounded 5,000-line client buffer, pause/resume, bookmarks, and local export.
+- Persistent projects, sessions, jobs, findings, snapshots, and artifacts.
+- Background execution, progress, cancellation state, retry-oriented history, and downloadable outputs.
+- Static/dynamic assessment panels and professional report export.
+
+Remote mode is opt-in. Non-loopback binding requires both TLS and an operator token of at least 24 characters:
 
 ```bash
-adbgath web --port 9000
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token "use-a-long-random-operator-token" \
+  --tls-cert ./server.crt \
+  --tls-key ./server.key
 ```
 
-The server binds to loopback by default. Remote network binding is intentionally rejected; use the UI only from the host running adbgath. The UI uses a same-site local session cookie, restrictive response headers, allowlisted actions, path confinement for artifact downloads, upload size limits, and explicit confirmation for state-changing operations.
+Plaintext remote mode is rejected. Local loopback mode remains the default and needs no login.
 
-Web capabilities include:
+See [`docs/WEB_UI.md`](docs/WEB_UI.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
 
-- Device and Android profile selectors.
-- Dependency and environment status.
-- Complete allowlisted operation builder.
-- Installed package explorer.
-- Secure local file staging for APKs, Frida scripts, and device-side tools.
-- Live WebSocket logcat stream.
-- Security audit findings and severity summary.
-- MASTG-oriented evidence collection.
-- Download links for generated workspace artifacts.
+## CLI help
 
-See [Web UI architecture and security](docs/WEB_UI.md).
-
-## CLI overview
+Every command provides command-specific help:
 
 ```bash
 adbgath -h
-adbgath <command> -h
+adbgath COMMAND -h
+adbgath COMMAND --help
 ```
 
-Global options:
+Running `adbgath` with no arguments starts interactive mode.
 
-```text
---device, -D, -s SERIAL   Select an ADB device
---user, -u PROFILE        Select Android profile: ID, current, owner
---adb-path PATH           Override adb/adb.exe discovery
---workspace PATH          Override the artifact workspace
---json                    Emit JSON
---no-banner               Suppress the banner
-```
-
-### Devices and wireless debugging
-
-```bash
-adbgath devices
-adbgath connect 192.168.1.50:5555
-adbgath disconnect 192.168.1.50:5555
-```
-
-Android 11+ may require pairing first:
-
-```bash
-adb pair 192.168.1.50:37123
-adbgath connect 192.168.1.50:5555
-```
-
-### Users, packages, and APK paths
+Global selection examples:
 
 ```bash
 adbgath --device emulator-5554 list users
-adbgath --device emulator-5554 --user current list packages
-adbgath --device emulator-5554 list packages --include-paths
-adbgath --device emulator-5554 list packages --system third-party
-adbgath --device emulator-5554 list paths --package com.example.app
+adbgath --device emulator-5554 --user current list packages --include-paths
+adbgath --connect 192.168.1.50:5555 --device 192.168.1.50:5555 info all
 ```
 
-### Download APKs
+State-changing application operations require an explicit device and Android profile.
 
-Download APKs for all packages visible to the selected profile:
+## APK and bundle workflows
+
+Pull all APK splits for a package:
 
 ```bash
-adbgath --device emulator-5554 --user current download --output ./apk-backup
+adbgath --device SERIAL --user current download com.example.app --output ./apks
 ```
 
-Download selected packages:
+Install a single APK:
 
 ```bash
-adbgath --device emulator-5554 download com.example.one com.example.two
+adbgath --device SERIAL --user 0 install ./app.apk --replace
 ```
 
-Download known remote APK paths:
+Install a split directory or `.apks` archive:
 
 ```bash
-adbgath --device emulator-5554 download /data/app/~~.../base.apk
+adbgath --device SERIAL --user 0 install-set ./split-directory
+adbgath --device SERIAL --user 0 install-set ./application.apks
 ```
 
-### Install, uninstall, and replace
-
-App-changing commands require an explicit Android profile.
+Transactional replacement:
 
 ```bash
-adbgath --device emulator-5554 --user 0 install app.apk
-adbgath --device emulator-5554 --user current install app.apk --replace
-adbgath --device emulator-5554 --user 10 uninstall com.example.app
-adbgath --device emulator-5554 --user 0 replace com.example.app replacement.apk
+# Safe first attempt: existing app is preserved if in-place replacement fails.
+adbgath --device SERIAL --user 0 replace com.example.app ./replacement.apk
+
+# Explicitly permit uninstall/install fallback and automatic APK rollback.
+adbgath --device SERIAL --user 0 replace com.example.app ./replacement.apk --allow-uninstall
 ```
 
-### Device and application information
+Bundletool workflows:
 
 ```bash
-adbgath --device emulator-5554 info basic
-adbgath --device emulator-5554 info network
-adbgath --device emulator-5554 info security
-adbgath --device emulator-5554 info all
-adbgath --device emulator-5554 app com.example.app
+adbgath bundle inspect app.aab
+adbgath --device SERIAL bundle device-spec --output device-spec.json
+adbgath bundle build-apks app.aab --output app.apks
+adbgath --device SERIAL bundle install-apks app.apks
+adbgath bundle extract app.apks --output ./extracted
 ```
 
-### Runtime inspection
+## Static and runtime analysis
 
 ```bash
-adbgath --device emulator-5554 runtime summary --package com.example.app
-adbgath --device emulator-5554 runtime processes
-adbgath --device emulator-5554 runtime activities
-adbgath --device emulator-5554 runtime services
+adbgath static ./app.apk --output ./reports/app-static.json
+adbgath --device SERIAL app com.example.app
+adbgath --device SERIAL runtime summary --package com.example.app
+adbgath --device SERIAL content --package com.example.app
 ```
 
-### Logcat
+Static findings include evidence, severity, confidence, component, impact, safe validation guidance, false-positive conditions, mitigation, and references.
 
-Live stream:
+## Reproducible assessment workflow
+
+Create a project:
 
 ```bash
-adbgath --device emulator-5554 logs listen
-adbgath --device emulator-5554 logs listen --package com.example.app
-adbgath --device emulator-5554 logs listen --regex "token|password|exception"
+adbgath project create "Example assessment" --scope com.example.app
+adbgath project list
 ```
 
-Timed capture:
+Run a full authorized workflow:
 
 ```bash
-adbgath --device emulator-5554 logs capture --duration 60 --output ./logs/app.log
-adbgath --device emulator-5554 logs capture --package com.example.app --clear-first
+adbgath --device SERIAL assess com.example.app --project-id PROJECT_ID
 ```
 
-Clear the buffer:
+The assessment records a session, captures evidence, downloads APKs, runs static analysis, saves findings, and exports JSON, Markdown, HTML, SARIF, and PDF artifacts.
+
+Findings lifecycle:
 
 ```bash
-adbgath --device emulator-5554 logs clear
+adbgath findings --project-id PROJECT_ID
+adbgath findings --set-status FINDING_ID validated
 ```
 
-### Rooted network capture
+Report export:
 
 ```bash
-adbgath --device emulator-5554 sniff interfaces
-adbgath --device emulator-5554 sniff push-tcpdump --file ./tcpdump
-adbgath --device emulator-5554 sniff capture --interface wlan0 --duration 60
+adbgath report PROJECT_ID --format html
+adbgath report PROJECT_ID --format pdf
+adbgath report PROJECT_ID --format sarif
+adbgath project export PROJECT_ID --output ./project-evidence.zip
 ```
 
-Packet capture uses `su` and a device-side `tcpdump`; it is not attempted on non-rooted devices.
-
-### Proxy and port mappings
+## Evidence and chain of custody
 
 ```bash
-adbgath --device emulator-5554 proxy show
-adbgath --device emulator-5554 proxy set 127.0.0.1:8080
-adbgath --device emulator-5554 proxy clear
-adbgath --device emulator-5554 forward reverse 8080 8080
+adbgath --device SERIAL evidence --package com.example.app --screen-record 15 --output ./evidence
 ```
 
-### Static analysis, Frida, content providers, and backups
+Collected evidence can include:
+
+- Device/build metadata and capabilities.
+- Android users and package inventory.
+- Logcat, properties, activities, windows, and package dumps.
+- Screenshot, optional screen recording, and bugreport.
+- Base and split APKs.
+- SHA-256 for every artifact.
+- Exact command, return code, duration, timestamps, device serial, tool version, and ADB version.
+- Redacted text copies for tokens, cookies, authorization values, emails, and phone-like data.
+
+To create an HMAC signature alongside the manifest:
 
 ```bash
-adbgath static ./app.apk
-adbgath --device emulator-5554 content --package com.example.app
-adbgath --device emulator-5554 frida ps
-adbgath --device emulator-5554 frida attach --package com.example.app --script ./trace.js
-adbgath --device emulator-5554 backup com.example.debuggable --output ./backup.tar
+export ADBGATH_MANIFEST_HMAC_KEY='store-this-key-securely'
+adbgath --device SERIAL evidence --package com.example.app
 ```
 
-Static analysis always produces SHA-256 and file metadata. Additional manifest/package metadata is collected when `apkanalyzer`, `aapt`, or `aapt2` is available.
-
-### Inventory, audits, and evidence collection
+## Snapshots and differences
 
 ```bash
-adbgath --device emulator-5554 inventory --output ./inventory.json
-adbgath --device emulator-5554 security --output ./security.json
-adbgath --device emulator-5554 collect --output ./device-collection
-adbgath --device emulator-5554 mastg --output ./mastg-evidence
+adbgath --device SERIAL snapshot create before --project-id PROJECT_ID --package com.example.app
+# Perform an authorized test or configuration change.
+adbgath --device SERIAL snapshot create after --project-id PROJECT_ID --package com.example.app
+adbgath snapshot diff before after --output ./diff.json
 ```
 
-The security command checks a small defensive posture baseline and writes JSON plus Markdown. It is not an automated compliance certification and does not replace manual OWASP MASTG testing.
-
-## Legacy v2 flag compatibility
-
-Common Bash-era flags are translated when no explicit v3 subcommand is present:
+## Multi-device groups
 
 ```bash
-adbgath --devices
-adbgath --device emulator-5554 -l users
-adbgath --device emulator-5554 -i network
-adbgath --device emulator-5554 --user 0 -I app.apk
-adbgath --device emulator-5554 --user 0 -U com.example.app
-adbgath --device emulator-5554 -C --output ./collection
+adbgath group add lab emulator-5554
+adbgath group add lab RF8M...
+adbgath group list
+adbgath run-group lab inventory
+adbgath run-group lab security
 ```
 
-The root `adbgath.sh` file remains as a Linux compatibility launcher after installation. Legacy batch inputs are also preserved:
+Group execution is restricted to read-only inventory, information, security, and capability operations.
+
+## Logcat, network, and Frida
 
 ```bash
-adbgath --device SERIAL --user current download --file examples/packages.txt
-adbgath --device SERIAL --user 0 install --file examples/apks.txt
-adbgath --device SERIAL --user 0 uninstall --file examples/packages.txt
-adbgath --device SERIAL --user 0 replace --file examples/replacements.txt
+adbgath --device SERIAL logs listen --package com.example.app
+adbgath --device SERIAL logs capture --duration 60 --regex "exception|security" --output app.log
+adbgath --device SERIAL proxy set 127.0.0.1:8080
+adbgath --device SERIAL forward reverse 8080 8080
+adbgath --device SERIAL sniff interfaces
+adbgath --device SERIAL sniff capture --interface wlan0 --duration 30 --output capture.pcap
 ```
 
-Replacement files use `APK_FILE PACKAGE_NAME`; quoted APK paths may contain spaces.
+Bundled Frida scripts are observation-only:
 
-## Configuration
+```bash
+adbgath frida scripts
+adbgath --device SERIAL frida attach --package com.example.app --script tls-observer
+adbgath --device SERIAL frida spawn --package com.example.app --script webview-observer
+adbgath frida history --limit 50
+```
 
-Environment variables:
+Script files are limited to JavaScript, bounded in size, and syntax-checked with Node.js when available. Stored Frida stdout/stderr is redacted by default and linked to a persistent session record. They do not disable TLS pinning, export plaintext keys, bypass authentication, or alter the target application.
+
+## Plugins
+
+Plugins are discovered through the `adbgath.plugins` Python entry-point group. Each plugin must declare its permissions from:
 
 ```text
-ADB_PATH             Explicit path to adb/adb.exe
-ADBGATH_HOME         Installation root used by platform-specific discovery
-ADBGATH_WORKSPACE    Default report and artifact workspace
+read_device
+write_device
+network
+filesystem
 ```
 
-Default workspace:
+List plugins:
 
-- Windows: `%USERPROFILE%\adbgath-workspace`
-- Linux: `$HOME/adbgath-workspace`
+```bash
+adbgath plugin list
+```
 
-## Security model
+Run only after approving every declared permission:
 
-- Every external command uses an argument array and `shell=False`.
-- Device serials, package names, profile IDs, paths, interfaces, ports, and durations are validated.
-- The web API exposes an action allowlist rather than a shell or raw ADB endpoint.
-- State-changing web operations require the literal confirmation `AUTHORIZED`.
-- The server only accepts loopback binding.
-- Artifact downloads are confined to the configured workspace.
-- Uploaded filenames are normalized and uploads are capped at 512 MiB.
-- The project intentionally does not automate credential theft, persistence, evasion, or unauthorized access.
+```bash
+adbgath --device SERIAL plugin run example-plugin \
+  --allow-permission read_device \
+  --allow-permission filesystem
+```
 
-See [Security design](docs/SECURITY.md) and the [implementation report](docs/IMPLEMENTATION_REPORT.md).
+See [`docs/PLUGIN_API.md`](docs/PLUGIN_API.md).
 
-## Development
+## Secure update and rollback
+
+Check the official release metadata:
+
+```bash
+adbgath update check
+```
+
+Review a local update plan:
+
+```bash
+adbgath update plan --archive release.zip --checksum SHA256
+```
+
+Install only a local ZIP whose SHA-256 you have independently verified:
+
+```bash
+adbgath update install --archive release.zip --checksum SHA256
+```
+
+Rollback:
+
+```bash
+adbgath update rollback
+```
+
+The updater rejects path traversal and symlink entries, limits archive entries/decompressed size, validates project metadata, preserves persistent directories, smoke-tests the staged release, and restores the previous installation automatically on failure.
+
+## Workspace
+
+Default location:
+
+```text
+~/adbgath-workspace/
+```
+
+Typical structure:
+
+```text
+adbgath-workspace/
+├── adbgath.db
+├── apks/
+├── backups/
+├── bundles/
+├── captures/
+├── evidence/
+├── exports/
+├── frida/
+│   └── sessions/
+├── logs/
+├── projects/
+├── reports/
+├── transactions/
+└── uploads/
+```
+
+Override it with `--workspace` or `ADBGATH_WORKSPACE`.
+
+## Development and validation
 
 ```bash
 python -m venv .venv
-# Linux/macOS
-source .venv/bin/activate
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-
-python -m pip install -e ".[dev,full]"
-python -m pytest
-python -m ruff check src tests
-python -m adbgath.cli --version
+. .venv/bin/activate                # Linux
+# .venv\Scripts\activate           # Windows
+python -m pip install -e ".[dev]"
+ruff check .
+python -m compileall -q src
+pytest
+node --check src/adbgath/web/static/app.js
+python -m build
 ```
 
-Cross-platform CI tests Python 3.11, 3.12, and 3.13 on Windows and Ubuntu.
+CI runs on Windows and Ubuntu with Python 3.11, 3.12, and 3.13. Dedicated workflows smoke-test the complete Windows installer and authorized read-only operations against an Android 15 emulator. Tests cover branding integrity, CLI parsing, strict validation, safe ADB wrapping, transactional replacement, split APKs, static analysis, evidence manifests, projects, jobs, snapshots, reports, authentication, plugins, updater rollback, web security, and cross-platform installer expectations.
 
-## Project structure
+## Security documentation
 
-```text
-adbgath/
-├── src/adbgath/
-│   ├── adb.py                 Safe ADB subprocess wrapper
-│   ├── service.py             Shared CLI/web capabilities
-│   ├── cli.py                 Cross-platform command-line interface
-│   ├── webapp.py              FastAPI local web service
-│   ├── validation.py          Input and path validation
-│   └── web/static/            Professional HTML/CSS/JavaScript UI
-├── installers/
-│   ├── windows/               CMD + PowerShell installer/uninstaller
-│   └── linux/                 Linux installer/uninstaller
-├── examples/                  Batch input examples
-├── tests/                     Fake-ADB unit and web tests
-├── docs/                      Windows, web, security, and migration guides
-└── .github/workflows/ci.yml   Windows/Linux CI matrix
-```
-
-## Responsible use
-
-Use adbgath only on devices, applications, emulators, laboratories, CTFs, or bug-bounty targets for which you have explicit authorization. Device state changes, packet capture, instrumentation, and app-data collection may affect privacy and stability.
+- [`docs/SECURITY.md`](docs/SECURITY.md)
+- [`docs/WEB_UI.md`](docs/WEB_UI.md)
+- [`docs/WINDOWS.md`](docs/WINDOWS.md)
+- [`docs/OFFLINE_INSTALL.md`](docs/OFFLINE_INSTALL.md)
+- [`docs/IMPLEMENTATION_REPORT.md`](docs/IMPLEMENTATION_REPORT.md)
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+See [`LICENSE`](LICENSE).
