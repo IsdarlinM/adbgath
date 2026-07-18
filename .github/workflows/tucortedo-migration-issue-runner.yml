@@ -1,0 +1,171 @@
+name: TuCorteDO temporary issue migration runner
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: tucortedo-repository-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.actor == 'IsdarlinM' && github.event.issue.title == '[TuCorteDO Migration] Run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      WORK_ROOT: ${{ runner.temp }}/tucortedo-migration
+
+    steps:
+      - name: Announce migration start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo IsdarlinM/adbgath \
+            --body 'TuCorteDO migration started on the free public runner. Source branches will only be deleted after all six destinations pass verification.'
+
+      - name: Validate temporary migration credential
+        env:
+          GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo 'TUCORTEDO_MIGRATION_TOKEN is missing.'
+            exit 1
+          fi
+          gh auth status
+          gh auth setup-git
+
+      - name: Clone private TuCorteDO source
+        env:
+          GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          rm -rf "$WORK_ROOT"
+          mkdir -p "$WORK_ROOT"
+          git clone --filter=blob:none --no-tags \
+            https://github.com/IsdarlinM/TuCorteDO.git \
+            "$WORK_ROOT/source"
+
+      - name: Harden migration for generated files and existing destinations
+        run: |
+          set -Eeuo pipefail
+          cd "$WORK_ROOT/source"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/migrate-components.sh')
+          text = path.read_text(encoding='utf-8')
+
+          start = text.index('verify_destination_empty() {')
+          end_marker = '\n}\n\nextract_export() {'
+          end = text.index(end_marker, start) + 3
+          replacement = r'''verify_destination_empty() {
+            local component="$1"
+            local repository="${DESTINATION_REPOSITORIES[$component]}"
+            local heads main_sha other_heads
+
+            heads="$(remote_heads "$repository")"
+            other_heads="$(printf '%s\n' "$heads" | awk '$2 != "refs/heads/main" {print $2}')"
+            [[ -z "$other_heads" ]] || fail \
+              "Destination ${repository} contains non-main branches and will not be replaced: ${other_heads}"
+
+            main_sha="$(printf '%s\n' "$heads" | awk '$2 == "refs/heads/main" {print $1}')"
+            if [[ -z "$main_sha" ]]; then
+              log "Destination ${repository} has no commits"
+            else
+              log "Destination ${repository} main=${main_sha} will be replaced using force-with-lease"
+            fi
+          }
+          '''
+          text = text[:start] + replacement + text[end:]
+
+          needle = '  extract_export "$component" "$stage"\n'
+          cleanup = r'''  extract_export "$component" "$stage"
+
+            # Exclude editor/build caches while preserving runtime .gitkeep placeholders.
+            find "$stage" -type d \( \
+              -name '.idea' -o \
+              -name '.gradle' -o \
+              -name 'node_modules' -o \
+              -name 'build' -o \
+              -name 'dist' -o \
+              -name 'coverage' \
+            \) -prune -exec rm -rf {} +
+          '''
+          if needle not in text:
+              raise SystemExit('prepare_stage insertion point not found')
+          text = text.replace(needle, cleanup, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          bash -n .github/scripts/migrate-components.sh
+
+      - name: Publish and verify all repositories
+        id: migration
+        env:
+          GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          cd "$WORK_ROOT/source"
+          {
+            GITHUB_WORKSPACE="$PWD" \
+            MIGRATION_OPERATION=migrate \
+            MIGRATION_CONFIRMATION=MIGRATE_TUCORTEDO \
+            CLEANUP_AFTER_MIGRATION=true \
+            CLEANUP_CONFIRMATION=DELETE_NON_MAIN_BRANCHES \
+            bash .github/scripts/migrate-components.sh
+
+            repositories=(
+              TuCorteDO-Platform
+              TuCorteDO-Android
+              TuCorteDO-iOS
+              TuCorteDO-Realtime
+              TuCorteDO-Support
+              TuCorteDO-Infrastructure
+            )
+            for repository in "${repositories[@]}"; do
+              echo "Independently verifying IsdarlinM/${repository}"
+              branch_count="$(git ls-remote --heads "https://github.com/IsdarlinM/${repository}.git" | wc -l | tr -d ' ')"
+              [[ "$branch_count" == '1' ]]
+              version="$(gh api "repos/IsdarlinM/${repository}/contents/VERSION?ref=main" --jq .content | base64 --decode)"
+              [[ "$version" == '1.2.0' ]]
+              gh api "repos/IsdarlinM/${repository}/contents/MIGRATION_MANIFEST.json?ref=main" --silent
+            done
+
+            source_branches="$(git ls-remote --heads https://github.com/IsdarlinM/TuCorteDO.git | awk '{sub("refs/heads/", "", $2); print $2}')"
+            [[ "$source_branches" == 'main' ]]
+            echo 'All six repositories and source branch cleanup verified.'
+          } 2>&1 | tee "$WORK_ROOT/migration.log"
+
+      - name: Report final result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIGRATION_OUTCOME: ${{ steps.migration.outcome }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$MIGRATION_OUTCOME" == 'success' ]]; then
+            gh issue comment "$ISSUE_NUMBER" --repo IsdarlinM/adbgath \
+              --body 'SUCCESS: all six TuCorteDO repositories were published and independently verified; the source now contains only main.'
+            gh issue close "$ISSUE_NUMBER" --repo IsdarlinM/adbgath --reason completed
+            exit 0
+          fi
+
+          {
+            echo 'FAILURE: the migration stopped safely. Source branches are retained unless every destination was verified.'
+            echo
+            echo '```text'
+            if [[ -f "$WORK_ROOT/migration.log" ]]; then
+              tail -n 80 "$WORK_ROOT/migration.log"
+            else
+              echo 'The migration step did not create a log; inspect the preceding workflow step.'
+            fi
+            echo '```'
+          } > "$RUNNER_TEMP/tucortedo-failure-comment.md"
+          gh issue comment "$ISSUE_NUMBER" --repo IsdarlinM/adbgath \
+            --body-file "$RUNNER_TEMP/tucortedo-failure-comment.md"
