@@ -1,0 +1,136 @@
+name: TuCorteDO temporary migration runner
+
+on:
+  push:
+    branches:
+      - tucortedo-migration-runner
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tucortedo-repository-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
+    steps:
+      - name: Checkout runner branch
+        uses: actions/checkout@v4
+        with:
+          ref: tucortedo-migration-runner
+
+      - name: Validate temporary credential
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo '::error::Add the TUCORTEDO_MIGRATION_TOKEN Actions secret to IsdarlinM/adbgath.'
+            exit 1
+          fi
+          gh auth status
+          gh auth setup-git
+
+      - name: Clone private TuCorteDO source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf "${RUNNER_TEMP}/TuCorteDO"
+          git clone --filter=blob:none --no-tags https://github.com/IsdarlinM/TuCorteDO.git "${RUNNER_TEMP}/TuCorteDO"
+
+      - name: Harden migration for generated files and known destinations
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "${RUNNER_TEMP}/TuCorteDO"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/migrate-components.sh')
+          text = path.read_text(encoding='utf-8')
+
+          start = text.index('verify_destination_empty() {')
+          end_marker = '\n}\n\nextract_export() {'
+          end = text.index(end_marker, start) + 3
+          replacement = r'''verify_destination_empty() {
+            local component="$1"
+            local repository="${DESTINATION_REPOSITORIES[$component]}"
+            local heads main_sha other_heads
+
+            heads="$(remote_heads "$repository")"
+            other_heads="$(printf '%s\n' "$heads" | awk '$2 != "refs/heads/main" {print $2}')"
+            [[ -z "$other_heads" ]] || fail \
+              "Destination ${repository} contains non-main branches and will not be replaced: ${other_heads}"
+
+            main_sha="$(printf '%s\n' "$heads" | awk '$2 == "refs/heads/main" {print $1}')"
+            if [[ -z "$main_sha" ]]; then
+              log "Destination ${repository} has no commits"
+            else
+              log "Destination ${repository} main=${main_sha} will be replaced using force-with-lease"
+            fi
+          }
+          '''
+          text = text[:start] + replacement + text[end:]
+
+          needle = '  extract_export "$component" "$stage"\n'
+          cleanup = r'''  extract_export "$component" "$stage"
+
+            # Remove editor/build caches from the exported source. Runtime placeholders
+            # such as uploads/.gitkeep and secrets/.gitkeep remain available.
+            find "$stage" -type d \( \
+              -name '.idea' -o \
+              -name '.gradle' -o \
+              -name 'node_modules' -o \
+              -name 'build' -o \
+              -name 'dist' -o \
+              -name 'coverage' \
+            \) -prune -exec rm -rf {} +
+          '''
+          if needle not in text:
+              raise SystemExit('prepare_stage insertion point not found')
+          text = text.replace(needle, cleanup, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          bash -n .github/scripts/migrate-components.sh
+
+      - name: Publish and verify all six repositories
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "${RUNNER_TEMP}/TuCorteDO"
+          GITHUB_WORKSPACE="$PWD" \
+          MIGRATION_OPERATION=migrate \
+          MIGRATION_CONFIRMATION=MIGRATE_TUCORTEDO \
+          CLEANUP_AFTER_MIGRATION=true \
+          CLEANUP_CONFIRMATION=DELETE_NON_MAIN_BRANCHES \
+          bash .github/scripts/migrate-components.sh
+
+      - name: Final independent verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          repositories=(
+            TuCorteDO-Platform
+            TuCorteDO-Android
+            TuCorteDO-iOS
+            TuCorteDO-Realtime
+            TuCorteDO-Support
+            TuCorteDO-Infrastructure
+          )
+          for repository in "${repositories[@]}"; do
+            echo "Verifying IsdarlinM/${repository}"
+            branch_count="$(git ls-remote --heads "https://github.com/IsdarlinM/${repository}.git" | wc -l | tr -d ' ')"
+            [[ "$branch_count" == "1" ]]
+            version="$(gh api "repos/IsdarlinM/${repository}/contents/VERSION?ref=main" --jq .content | base64 --decode)"
+            [[ "$version" == "1.2.0" ]]
+            gh api "repos/IsdarlinM/${repository}/contents/MIGRATION_MANIFEST.json?ref=main" --silent
+          done
+
+          source_branches="$(git ls-remote --heads https://github.com/IsdarlinM/TuCorteDO.git | awk '{sub("refs/heads/", "", $2); print $2}')"
+          [[ "$source_branches" == "main" ]]
+          echo 'All six repositories and source branch cleanup verified.'
