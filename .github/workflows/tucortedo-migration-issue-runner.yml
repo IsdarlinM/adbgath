@@ -1,7 +1,9 @@
-name: TuCorteDO temporary issue migration runner
+name: TuCorteDO temporary migration runner
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
   issues:
     types: [opened]
 
@@ -15,7 +17,11 @@ concurrency:
 
 jobs:
   migrate:
-    if: github.actor == 'IsdarlinM' && (github.event_name == 'workflow_dispatch' || github.event.issue.title == '[TuCorteDO Migration] Run')
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.actor == 'IsdarlinM' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event.issue.title == '[TuCorteDO Migration] Run'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -23,7 +29,22 @@ jobs:
       WORK_ROOT: ${{ runner.temp }}/tucortedo-migration
 
     steps:
+      - name: One-time execution gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          state="$(gh issue view "$ISSUE_NUMBER" --repo IsdarlinM/adbgath --json state --jq .state)"
+          if [[ "$state" == 'OPEN' ]]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            echo 'Migration control issue is closed; scheduled run is a no-op.'
+          fi
+
       - name: Announce migration start
+        if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -31,6 +52,7 @@ jobs:
             --body 'TuCorteDO migration started on the free public runner. Source branches will only be deleted after all six destinations pass verification.'
 
       - name: Validate temporary migration credential
+        if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
         run: |
@@ -43,6 +65,7 @@ jobs:
           gh auth setup-git
 
       - name: Clone private TuCorteDO source
+        if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
         run: |
@@ -54,6 +77,7 @@ jobs:
             "$WORK_ROOT/source"
 
       - name: Harden migration for generated files and existing destinations
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -Eeuo pipefail
           cd "$WORK_ROOT/source"
@@ -107,6 +131,7 @@ jobs:
           bash -n .github/scripts/migrate-components.sh
 
       - name: Publish and verify all repositories
+        if: steps.gate.outputs.run == 'true'
         id: migration
         env:
           GH_TOKEN: ${{ secrets.TUCORTEDO_MIGRATION_TOKEN }}
@@ -144,7 +169,7 @@ jobs:
           } 2>&1 | tee "$WORK_ROOT/migration.log"
 
       - name: Report final result
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           MIGRATION_OUTCOME: ${{ steps.migration.outcome }}
