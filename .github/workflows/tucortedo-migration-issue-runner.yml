@@ -1,6 +1,7 @@
 name: TuCorteDO temporary issue migration runner
 
 on:
+  workflow_dispatch:
   issues:
     types: [opened]
 
@@ -14,11 +15,11 @@ concurrency:
 
 jobs:
   migrate:
-    if: github.actor == 'IsdarlinM' && github.event.issue.title == '[TuCorteDO Migration] Run'
+    if: github.actor == 'IsdarlinM' && (github.event_name == 'workflow_dispatch' || github.event.issue.title == '[TuCorteDO Migration] Run')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_NUMBER: 1
       WORK_ROOT: ${{ runner.temp }}/tucortedo-migration
 
     steps:
