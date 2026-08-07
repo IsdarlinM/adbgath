@@ -44,3 +44,6 @@ def apply() -> None:
     webapp_module.DESTRUCTIVE_ACTIONS = {name for name, op in operations_module.OPERATIONS.items() if op.destructive}
     webapp_module.LONG_RUNNING_ACTIONS = {name for name, op in operations_module.OPERATIONS.items() if op.long_running}
     patch_webapp(webapp_module)
+
+    from .runtimefix360 import apply_runtime_fixes
+    apply_runtime_fixes()
