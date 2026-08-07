@@ -16,8 +16,9 @@ def _subcommands(parser: argparse.ArgumentParser) -> dict[str, argparse.Argument
 
 def _service(module: Any, args: argparse.Namespace):
     from .adb import AdbClient
+    from .service import AdbgathService
     adb = AdbClient(args.adb_path) if getattr(args, "adb_path", None) else None
-    return module.AdbgathService(adb, workspace=getattr(args, "workspace", None))
+    return AdbgathService(adb, workspace=getattr(args, "workspace", None))
 
 
 def patch_cli(module: Any) -> None:
