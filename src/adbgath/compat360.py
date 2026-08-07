@@ -22,7 +22,9 @@ def apply() -> None:
 
     from .core import operations as operations_module
     from .core.operations360 import patch_operations
+    from .commandcleanup360 import patch_operations as patch_command_operations
     patch_operations(operations_module)
+    patch_command_operations(operations_module)
 
     from . import service as service_module
     from .service360 import patch_service
@@ -34,8 +36,10 @@ def apply() -> None:
     from . import cli as cli_module
     from .cli360 import patch_cli
     from .updatecli360 import patch_update_cli
+    from .commandcleanup360 import patch_cli as patch_command_cli
     patch_cli(cli_module)
     patch_update_cli(cli_module)
+    patch_command_cli(cli_module)
 
     from . import webapp as webapp_module
     from .webapp360 import patch_webapp
