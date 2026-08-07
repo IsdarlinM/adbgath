@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Final
 
 BASELINE_VERSION: Final = 330
-CURRENT_SCHEMA_VERSION: Final = 340
+CURRENT_SCHEMA_VERSION: Final = 360
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +40,25 @@ MIGRATIONS: tuple[Migration, ...] = (
             ON inventory_states(device_serial, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_inventory_states_digest
             ON inventory_states(digest);
+        """,
+    ),
+    Migration(
+        360,
+        "distributed lab, policy, audit, and content-addressed artifacts",
+        """
+        CREATE TABLE IF NOT EXISTS artifact_objects (digest TEXT PRIMARY KEY,size INTEGER NOT NULL,stored_size INTEGER NOT NULL,compression TEXT NOT NULL,path TEXT NOT NULL UNIQUE,ref_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS artifact_refs (id TEXT PRIMARY KEY,digest TEXT NOT NULL REFERENCES artifact_objects(digest) ON DELETE CASCADE,project_id TEXT,session_id TEXT,logical_name TEXT NOT NULL,metadata_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS idx_artifact_refs_digest ON artifact_refs(digest);
+        CREATE TABLE IF NOT EXISTS policy_rules (id TEXT PRIMARY KEY,role TEXT NOT NULL,action TEXT NOT NULL,effect TEXT NOT NULL CHECK(effect IN ('allow','deny')),created_at TEXT NOT NULL,UNIQUE(role,action));
+        CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY,actor TEXT NOT NULL,role TEXT NOT NULL,action TEXT NOT NULL,target TEXT,decision TEXT NOT NULL,details_json TEXT NOT NULL DEFAULT '{}',prev_hash TEXT,event_hash TEXT NOT NULL,created_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS idx_audit_events_created ON audit_events(created_at DESC);
+        CREATE TABLE IF NOT EXISTS lab_agents (id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,token_hash TEXT NOT NULL,certificate_fingerprint TEXT,endpoint TEXT,capabilities_json TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'enrolled',last_seen TEXT,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS lab_pools (id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS lab_pool_members (pool_id TEXT NOT NULL REFERENCES lab_pools(id) ON DELETE CASCADE,agent_id TEXT NOT NULL REFERENCES lab_agents(id) ON DELETE CASCADE,device_serial TEXT NOT NULL,PRIMARY KEY(pool_id,agent_id,device_serial));
+        CREATE TABLE IF NOT EXISTS lab_jobs (id TEXT PRIMARY KEY,agent_id TEXT NOT NULL REFERENCES lab_agents(id) ON DELETE CASCADE,action TEXT NOT NULL,payload_json TEXT NOT NULL,requested_by TEXT NOT NULL,requested_role TEXT NOT NULL,approved INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'queued',result_json TEXT,error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS idx_lab_jobs_agent_status ON lab_jobs(agent_id,status,created_at);
+        CREATE TABLE IF NOT EXISTS plugin_publishers (name TEXT PRIMARY KEY,public_key_pem TEXT NOT NULL,fingerprint TEXT NOT NULL,revoked INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS evidence_holds (project_id TEXT PRIMARY KEY,reason TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
         """,
     ),
 )
@@ -115,7 +134,7 @@ def backup_database(database: Path, *, keep: int = 3) -> Path | None:
     backup_dir = database.parent / "database-backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    backup = backup_dir / f"{database.stem}-pre-340-{stamp}.sqlite3"
+    backup = backup_dir / f"{database.stem}-pre-{CURRENT_SCHEMA_VERSION}-{stamp}.sqlite3"
     source = sqlite3.connect(database)
     target = sqlite3.connect(backup)
     try:
