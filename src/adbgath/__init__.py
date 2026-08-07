@@ -1,8 +1,8 @@
 """adbgath package."""
 
-__version__ = "3.4.0"
+__version__ = "3.6.0"
 
-from .compat340 import apply as _apply_340
+from .compat360 import apply as _apply_360
 
-_apply_340()
-del _apply_340
+_apply_360()
+del _apply_360
