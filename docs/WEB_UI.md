@@ -68,3 +68,30 @@ Uploads use basename normalization, collision-safe destination names, streaming 
 Operation presets are stored in `localStorage` under a versioned ADB-Gath key. They contain only catalogued form fields and are never treated as authorization for destructive actions. Destructive operations still require a fresh authorization confirmation.
 
 The live logcat console keeps at most 5,000 lines in browser memory. Pausing stops rendering, not collection; resuming displays the newest retained buffer. Bookmarks are local references and can be exported with the visible log data.
+
+## Wireless Debugging workspace
+
+The Wireless view provides:
+
+- ADB server and mDNS status.
+- Pairing and connection service discovery.
+- Secure six-digit pairing-code entry.
+- Separate pairing and connection endpoint fields.
+- Live mDNS monitoring over an authenticated WebSocket.
+- Connect, disconnect, and auto-connect controls.
+- Known-target aliases and local record removal.
+- Diagnostics and an explicit ADB-Gath-scoped repair action.
+
+Pairing-code fields use password input semantics. Codes are sent only to the synchronous execute endpoint, are never accepted by the persistent job endpoint, are removed from the browser field after use, and are excluded from local presets.
+
+## Job cancellation
+
+Background jobs execute ADB commands inside a cancellation context. Cancelling a running job signals the active child process, attempts graceful termination, and uses forced termination only after a short timeout. The job is then recorded as cancelled rather than completed.
+
+## 3.4 QR pairing and shared wireless events
+
+The Wireless workspace provides two explicit Android 11+ pairing paths: QR and six-digit code. QR creation requires authorized-target confirmation and is handled by dedicated endpoints rather than a persistent job. The SVG is protected by the local session, uses `Cache-Control: no-store`, and is removed from the page when the session terminates.
+
+Session progress is delivered through `/ws/wireless/qr/{session_id}`. General device and mDNS changes are delivered through one shared `WirelessEventBroker`; browser clients no longer create independent discovery loops. QR secrets are never sent back to JavaScript or stored in browser storage.
+
+Incremental inventory and schema-health operations remain available in the Command Center through the shared operation catalog.

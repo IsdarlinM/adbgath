@@ -17,7 +17,7 @@ def test_web_bootstrap_and_allowed_action(service):
     bootstrap = client.get("/api/bootstrap")
     assert bootstrap.status_code == 200
     body = bootstrap.json()
-    assert body["version"] == "3.2.9"
+    assert body["version"] == "3.4.0"
     assert {item["name"] for item in body["operations"]} == set(WEB_ACTIONS)
 
     result = client.post("/api/execute", json={"action": "packages", "payload": {}})
@@ -66,3 +66,49 @@ def test_web_bootstrap_starts_without_adb(monkeypatch, tmp_path):
     devices = client.get("/api/devices")
     assert devices.status_code == 400
     assert "ADB intentionally unavailable" in devices.json()["error"]
+
+
+def test_wireless_operations_exposed_and_secret_typed(service):
+    client = TestClient(create_app(service=service))
+    client.get("/")
+    body = client.get("/api/operations").json()["data"]
+    operations = {item["name"]: item for item in body}
+    assert "wireless_pair" in operations
+    code = next(field for field in operations["wireless_pair"]["fields"] if field["name"] == "pairing_code")
+    assert code["field_type"] == "secret"
+
+
+def test_web_pair_requires_confirmation_and_never_returns_code(service):
+    client = TestClient(create_app(service=service))
+    client.get("/")
+    payload = {"action": "wireless_pair", "payload": {"target": "192.168.1.5:37123", "pairing_code": "123456"}}
+    denied = client.post("/api/execute", json=payload)
+    assert denied.status_code == 409
+    payload["confirmation"] = "AUTHORIZED"
+    response = client.post("/api/execute", json=payload)
+    assert response.status_code == 200
+    assert "123456" not in response.text
+
+
+def test_wireless_pair_cannot_be_persisted_as_job(service):
+    client = TestClient(create_app(service=service))
+    client.get("/")
+    response = client.post(
+        "/api/jobs",
+        json={
+            "action": "wireless_pair",
+            "payload": {"target": "192.168.1.5:37123", "pairing_code": "123456"},
+            "confirmation": "AUTHORIZED",
+        },
+    )
+    assert response.status_code == 400
+    assert "long-running" in response.json()["detail"]
+
+
+def test_wireless_websocket_streams_discovery(service):
+    client = TestClient(create_app(service=service))
+    client.get("/")
+    with client.websocket_connect("/ws/wireless") as websocket:
+        message = websocket.receive_json()
+        assert message["ok"] is True
+        assert len(message["data"]["services"]) == 2

@@ -1,8 +1,8 @@
-# ADB-Gath 3.2.9 implementation report
+# ADB-Gath 3.4.0 implementation report
 
 ## Objective
 
-Version 3.2.9 completes the migration from a Linux/Bash-only utility to a cross-platform Android security assessment workspace. The release keeps the historical ADB-Gath identity while providing native Windows/Linux operation, a shared CLI/Web capability layer, persistent assessment data, reproducible evidence, and safer application-management workflows.
+Version 3.4.0 completes the migration from a Linux/Bash-only utility to a cross-platform Android security assessment workspace. The release keeps the historical ADB-Gath identity while providing native Windows/Linux operation, a shared CLI/Web capability layer, persistent assessment data, reproducible evidence, and safer application-management workflows.
 
 ## Architecture
 
@@ -172,3 +172,28 @@ The source tree includes automated tests for:
 The repository also contains dedicated Windows installer and Android emulator integration workflows.
 
 See the repository CI workflow for the Windows/Ubuntu Python matrix and package build checks.
+
+## Wireless Debugging implementation in 3.4.0
+
+Version 3.4.0 includes a modular `WirelessManager`, structured mDNS parsers, secure code pairing through stdin, AOSP-compatible one-time QR pairing, semantic ADB result classification, known-target persistence, local metrics, cancellable background commands, optimized device enumeration, a shared event broker, and a dedicated Web UI.
+
+## Modularization and performance work
+
+The 3.4.0 service layer now uses focused mixins and managers instead of placing every workflow in one implementation file:
+
+- `DeviceMixin` owns device inventory, users, package listing, capabilities, and runtime summaries.
+- `LogsMixin` owns bounded logcat capture, streaming, validation, and clearing.
+- `NetworkMixin` owns interfaces, rooted packet capture, proxy, and forwarding.
+- `SystemMixin` owns diagnostics and local performance metrics.
+- `DispatchMixin` owns the allowlisted CLI/Web operation router.
+- `WirelessManager` owns discovery, pairing, connection lifecycle, diagnosis, known targets, aliases, and live watch behavior.
+
+Device detail enrichment is concurrent and briefly cached; `devices --fast` skips secondary probes. Long-running subprocesses can receive the Web job cancellation signal, and local operation metrics help identify slow ADB calls without transmitting telemetry.
+
+## 3.4.0 release extension
+
+Version 3.4.0 adds AOSP-compatible QR pairing, a shared event broker, formal SQLite migrations, incremental inventory history, deterministic capability caching, and a dedicated Web QR experience. The owner-approved banner, name, and visual identity remain unchanged.
+
+The QR coordinator stores the random instance, secret, SVG, state, and cancellation primitive only in process memory. The public session model contains a redaction marker but never the secret. Pairing uses standard input and post-pairing connection is resolved separately through `_adb-tls-connect._tcp`.
+
+The broker centralizes mDNS and ADB transport reconciliation. Ordered events and bounded history support CLI and Web consumers while adaptive backoff limits repeated failures. Database migration 340 creates inventory-state history, records checksums, validates integrity, and restores a pre-migration backup if initialization fails.

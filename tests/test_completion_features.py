@@ -102,7 +102,7 @@ def test_project_export_zip_contains_metadata_and_workspace_artifacts(service):
         assert {"project.json", "sessions.json", "findings.json", "snapshots.json", "export-manifest.json"} <= names
         assert any(name.endswith("report.json") for name in names)
         manifest = json.loads(archive.read("export-manifest.json"))
-        assert manifest["tool_version"] == "3.2.9"
+        assert manifest["tool_version"] == "3.4.0"
         assert manifest["included"][0]["sha256"] == sha256_file(artifact)
         assert any(item["reason"] == "outside workspace" for item in manifest["skipped"])
 

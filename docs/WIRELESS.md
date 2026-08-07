@@ -1,63 +1,106 @@
 # Wireless Debugging
 
-ADB-Gath 3.3.0 supports Android 11+ Wireless Debugging through the **pairing code** workflow. QR pairing is not implemented in this release.
+ADB-Gath 3.4.0 supports both Android 11+ Wireless Debugging workflows exposed by Android: **Pair device with QR code** and **Pair device with pairing code**.
 
-## Pairing and connecting use different ports
+## Trust and scope
 
-Android publishes two mDNS service types:
+Use these workflows only with devices you own or are explicitly authorized to assess. Wireless pairing establishes workstation trust on Android. ADB-Gath does not scan arbitrary networks, brute-force ports, bypass Android confirmation, or extract pairing credentials.
 
-- `_adb-tls-pairing._tcp`: temporary service used only by `adb pair`.
-- `_adb-tls-connect._tcp`: service used by `adb connect` after pairing.
-
-The pairing port can disappear when pairing succeeds, the dialog expires, or the Android pairing dialog closes. Calling `connect` against that temporary port can therefore return `failed to connect` or Windows socket error `10061`.
-
-## CLI workflow
+## QR pairing
 
 On Android:
 
 1. Open **Developer options**.
 2. Open **Wireless debugging**.
-3. Enable Wireless debugging for the current trusted network.
-4. Select **Pair device with pairing code**.
-5. Keep the dialog open while pairing.
+3. Enable Wireless debugging on the trusted local network.
+4. Select **Pair device with QR code**.
 
 On the workstation:
+
+```bash
+adbgath wireless qr
+```
+
+ADB-Gath generates the AOSP ADB Wi-Fi QR grammar:
+
+```text
+WIFI:T:ADB;S:studio-<random-instance>;P:<one-time-secret>;;
+```
+
+The QR is compatible with the Android Wireless Debugging scanner. After the device scans it, Android advertises a temporary `_adb-tls-pairing._tcp` service whose instance matches the QR. ADB-Gath:
+
+1. waits for that exact instance through the shared mDNS broker;
+2. sends the one-time secret to `adb pair` through standard input;
+3. never includes the secret in process arguments or returned metadata;
+4. discovers the separate `_adb-tls-connect._tcp` service;
+5. connects automatically unless disabled;
+6. deletes the temporary SVG unless `--keep` is supplied.
+
+Options:
+
+```bash
+adbgath wireless qr --timeout 180
+adbgath wireless qr --no-auto-connect
+adbgath wireless qr --output ./pairing.svg --open
+adbgath wireless qr --keep
+```
+
+Security properties:
+
+- random service instance and secret for every session;
+- 30–300 second lifetime;
+- secret held only in process memory;
+- no SQLite, metrics, jobs, reports, presets, logs, shell history, or browser storage;
+- Web SVG responses use `Cache-Control: no-store`;
+- Web creation requires the literal authorized-target confirmation;
+- terminal sessions remove the QR from the browser view.
+
+## Pairing with a six-digit code
+
+Android uses two different endpoints:
+
+- `_adb-tls-pairing._tcp`: temporary endpoint used only by `adb pair`;
+- `_adb-tls-connect._tcp`: endpoint used by `adb connect` after pairing.
+
+On Android, choose **Pair device with pairing code** and keep the dialog open. Then:
 
 ```bash
 adbgath wireless discover
 adbgath wireless pair 172.18.9.245:42029
 ```
 
-Enter the six-digit code when prompted. The code:
-
-- is passed only through standard input;
-- is not part of the process arguments;
-- is not saved in command history, SQLite, jobs, reports, presets, metrics, or artifacts;
-- is cleared from the Web UI after every attempt.
-
-After successful pairing, use the IP and port shown on the main Android **Wireless debugging** screen:
+Enter the six-digit code through the protected prompt. After pairing, use the separate connection endpoint shown on the main Wireless debugging screen:
 
 ```bash
 adbgath wireless connect 172.18.9.245:40587
 adbgath devices --details
 ```
 
-The pairing and connection ports normally differ.
+The pairing and connection ports usually differ. Reusing the temporary pairing port for `connect` commonly produces `failed to connect` or Windows socket error `10061`.
 
-A short alias is also available:
+## Shared event broker
 
 ```bash
-adbgath pair 172.18.9.245:42029
+adbgath wireless broker status
+adbgath wireless broker start
+adbgath wireless broker stop
 ```
 
-## Discovery and monitoring
+The broker centralizes ADB device and mDNS reconciliation in one bounded daemon thread. It emits ordered events for:
+
+- pairing/connection service added, removed, or changed;
+- ADB device added, removed, or changed;
+- broker start, stop, snapshots, and errors.
+
+The Web UI subscribes to this shared stream instead of spawning a discovery subprocess for every browser connection. The broker uses bounded event history and adaptive backoff after failures.
+
+## Discovery
 
 ```bash
 adbgath wireless discover
-adbgath wireless watch --interval 3
 ```
 
-ADB-Gath first attempts:
+ADB-Gath prefers:
 
 ```text
 adb mdns track-services --proto-text
@@ -69,48 +112,37 @@ and falls back to:
 adb mdns services
 ```
 
-Parsed fields can include service type, instance, IPv4, bracketed IPv6, `.local` hostname, port, model, given name, serial, Android SDK metadata and mDNS service version.
+It parses IPv4, bracketed IPv6, `.local` hostnames, ports, service type, model, given name, serial, SDK metadata, and ADB Wi-Fi service version when available.
 
-## Diagnostics
+Live CLI monitoring:
+
+```bash
+adbgath wireless watch --interval 3
+```
+
+## Diagnostics and repair
 
 ```bash
 adbgath wireless status
 adbgath wireless diagnose
-```
-
-Diagnostics inspect Platform-Tools, `adb server-status`, `mdns_enabled`, the mDNS backend, advertised pairing/connection services, current transports and locally known targets.
-
-Safe repair for the current process:
-
-```bash
 adbgath wireless diagnose --fix
-```
-
-ADB-Gath-scoped persistent repair:
-
-```bash
 adbgath wireless diagnose --fix --persist
 ```
 
-The persistent option writes only these non-secret values to `ADBGATH_HOME/wireless.env`:
+Diagnostics inspect Platform-Tools, `adb server-status`, `mdns_enabled`, mDNS backend, service discovery, transports, and known targets.
+
+Persistent repair writes only non-secret ADB-Gath-scoped values to `ADBGATH_HOME/wireless.env`:
 
 ```text
 ADB_MDNS=1
 ADB_MDNS_OPENSCREEN=0
 ```
 
-It does not modify Android settings or globally edit operating-system environment variables.
+It does not change Android settings or globally rewrite the operating-system environment.
 
-## Semantic success detection
+## Semantic ADB success
 
-Some ADB networking builds return process exit code `0` while printing a failure such as:
-
-```text
-failed to connect to HOST:PORT
-cannot connect to HOST:PORT: ... actively refused it. (10061)
-```
-
-ADB-Gath evaluates both the return code and ADB output and returns `ok: false` with `semantic_failure: adb-textual-failure` for these cases.
+Some ADB networking builds return process code `0` while printing a failure. ADB-Gath evaluates both exit status and output. Text such as `failed to connect`, `cannot connect`, authentication failure, or an actively refused socket is returned with `ok: false` and a semantic failure marker.
 
 ## Known targets
 
@@ -120,62 +152,31 @@ adbgath wireless alias TARGET_ID "SOC Android Lab"
 adbgath wireless forget TARGET_ID
 ```
 
-ADB-Gath stores only non-secret discovery and connection metadata. `forget` removes the local ADB-Gath record; revoke workstation trust from Android's Wireless debugging settings.
-
-## Auto-connect
-
-```bash
-adbgath wireless auto-connect
-```
-
-This attempts connection only to currently discovered `_adb-tls-connect._tcp` services. It does not scan IP ranges, guess ports, brute-force codes or bypass Android trust prompts.
-
-## Legacy USB-assisted TCP/IP mode
-
-For an explicitly selected USB-authorized device:
-
-```bash
-adbgath --device USB_SERIAL wireless tcpip --port 5555
-adbgath wireless connect 192.168.1.50:5555
-```
-
-This is separate from Android 11+ TLS pairing.
-
-## Web UI
-
-Start the local console and open `/wireless`:
-
-```bash
-adbgath web
-```
-
-The Wireless workspace provides discovery, live mDNS updates, password-style code entry, pairing, connect/disconnect, auto-connect, diagnostics, ADB-Gath-scoped repair, aliases and local target removal. Pairing cannot be queued as a persistent background job.
+Only non-secret discovery and connection metadata is stored. Removing the local record does not revoke Android trust; use Android's **Forget** action to revoke the workstation key.
 
 ## Troubleshooting
 
-### Windows error 10061
+### QR remains waiting for scan
 
-- Keep the Android pairing dialog open while pairing.
-- Use `pair`, not `connect`, with the temporary pairing endpoint.
-- Use the connection port from Android's main Wireless debugging screen after pairing.
-- Verify both systems are on the same trusted network.
-- Check AP/client isolation, guest Wi-Fi, VPN and firewall behavior.
-
-### No mDNS services
-
-```bash
-adbgath wireless diagnose
-adbgath wireless diagnose --fix --persist
-```
-
-If discovery remains empty, manually enter the endpoints displayed by Android.
+- Confirm the Android QR scanner was opened from Wireless debugging, not a generic camera app.
+- Keep both devices on a network that allows multicast/mDNS.
+- Run `adbgath wireless diagnose`.
+- Check guest-network/AP isolation, VPN routes, and host firewall multicast rules.
 
 ### Paired but not connected
 
-```bash
-adbgath wireless discover
-adbgath wireless auto-connect
-adbgath devices --watch
-```
+- Android may take a moment to publish `_adb-tls-connect._tcp`.
+- Run `adbgath wireless discover` and `adbgath wireless auto-connect`.
+- Keep Wireless debugging enabled.
+- Android can rotate the connection port after network changes.
 
-Android can rotate the connection port after network or service changes.
+### Code pairing returns Windows error 10061
+
+- The pairing dialog probably expired or closed.
+- The endpoint may be the temporary pairing port being incorrectly reused for connection.
+- Reopen the dialog, use `wireless pair`, then connect to the separate port.
+
+## Official references
+
+- Android Developers, Android Debug Bridge and Wireless debugging: https://developer.android.com/tools/adb
+- AOSP ADB Wi-Fi design and QR payload: https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/docs/dev/adb_wifi.md

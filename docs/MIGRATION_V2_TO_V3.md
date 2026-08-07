@@ -1,8 +1,8 @@
-# Migration from 2.2.0 to 3.2.9
+# Migration from 2.2.0 to 3.4.0
 
 ## Summary
 
-ADB-Gath 2.2.0 relied primarily on Bash modules and Unix installation paths. Version 3.2.9 replaces that execution core with a cross-platform Python architecture while preserving common legacy options and the historical ADB-Gath branding.
+ADB-Gath 2.2.0 relied primarily on Bash modules and Unix installation paths. Version 3.4.0 replaces that execution core with a cross-platform Python architecture while preserving common legacy options and the historical ADB-Gath branding.
 
 ## Preserved workflows
 
