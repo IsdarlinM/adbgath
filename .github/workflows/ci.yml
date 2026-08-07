@@ -29,7 +29,10 @@ jobs:
       - run: python -m ruff check .
       - run: python -m compileall -q src
       - run: python -m pytest
-      - run: node --check src/adbgath/web/static/app.js
+      - name: Validate JavaScript
+        shell: bash
+        run: |
+          for file in src/adbgath/web/static/*.js src/adbgath/frida/scripts/*.js; do node --check "$file"; done
       - run: adbgath --version
       - name: Validate Bash installers
         if: runner.os == 'Linux'
@@ -71,6 +74,8 @@ jobs:
               'adbgath/web/static/index.html',
               'adbgath/web/static/app.js',
               'adbgath/web/static/styles.css',
+              'adbgath/web/static/lab360.js',
+              'adbgath/web/static/lab360.css',
               'adbgath/frida/scripts/tls-observer.js',
               'adbgath/frida/scripts/crypto-monitor.js',
               'adbgath/frida/scripts/webview-observer.js',
