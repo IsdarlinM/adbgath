@@ -57,9 +57,21 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP "adbgath-install"
           & .\installers\windows\install.ps1 -InstallRoot $root -SkipFrida -SkipBundletool -NoPathChanges -Repair
           & (Join-Path $root "bin\adbgath.cmd") --version
-      - name: Uninstall without touching unrelated user data
+      - name: Uninstall with a managed executable locked
         shell: powershell
         run: |
           $root = Join-Path $env:RUNNER_TEMP "adbgath-install"
+          $platformTools = Join-Path $root "platform-tools"
+          $lockExe = Join-Path $platformTools "adb-lock-test.exe"
+          $ping = (Get-Command ping.exe -ErrorAction Stop).Source
+          Copy-Item -LiteralPath $ping -Destination $lockExe -Force
+          $locked = Start-Process -FilePath $lockExe -ArgumentList @("-n", "30", "127.0.0.1") -WindowStyle Hidden -PassThru
+          Start-Sleep -Milliseconds 500
+          if ($locked.HasExited) { throw "Lock-test process exited before uninstall regression could run." }
+
           & .\installers\windows\uninstall.ps1 -InstallRoot $root
           if (Test-Path $root) { throw "Installer root still exists after uninstall." }
+          Start-Sleep -Milliseconds 250
+          if (Get-Process -Id $locked.Id -ErrorAction SilentlyContinue) {
+            throw "Managed process is still running after uninstall."
+          }
