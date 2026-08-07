@@ -97,7 +97,7 @@ def test_qr_payload_uses_aosp_adb_wifi_grammar():
     assert payload == "WIFI:T:ADB;S:studio-AbC123xYz9;P:A1b2C3d4E5f6;;"
     svg = render_qr_svg(payload)
     assert svg.startswith(b"<?xml") or b"<svg" in svg[:500]
-    assert b"A1b2C3d4E5f6" not in svg  # encoded as modules, not exposed as text
+    assert b"A1b2C3d4E5f6" not in svg
 
 
 def test_qr_coordinator_pairs_and_connects_without_exposing_secret(tmp_path: Path):
@@ -167,7 +167,7 @@ def test_formal_database_migration_creates_backup_and_inventory_table(tmp_path: 
     assert status["database_version"] == CURRENT_SCHEMA_VERSION
     assert status["integrity"] == "ok"
     assert any(item["version"] == CURRENT_SCHEMA_VERSION for item in status["migrations"])
-    assert list((tmp_path / "database-backups").glob("adbgath-pre-340-*.sqlite3"))
+    assert list((tmp_path / "database-backups").glob("adbgath-pre-360-*.sqlite3"))
     with store.connect() as migrated:
         assert migrated.execute("SELECT value FROM legacy_marker").fetchone()[0] == "preserve"
         assert migrated.execute("SELECT name FROM sqlite_master WHERE name='inventory_states'").fetchone()
