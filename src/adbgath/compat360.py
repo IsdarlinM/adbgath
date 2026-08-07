@@ -26,12 +26,16 @@ def apply() -> None:
 
     from . import service as service_module
     from .service360 import patch_service
+    from .core.selfupdate360 import patch_self_update
     service_module.WEB_ACTIONS = operations_module.WEB_ACTIONS
     patch_service(service_module)
+    patch_self_update(service_module)
 
     from . import cli as cli_module
     from .cli360 import patch_cli
+    from .updatecli360 import patch_update_cli
     patch_cli(cli_module)
+    patch_update_cli(cli_module)
 
     from . import webapp as webapp_module
     from .webapp360 import patch_webapp
