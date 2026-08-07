@@ -1,0 +1,42 @@
+name: supply-chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip build
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest
+      - run: python -m build
+      - run: adbgath sbom --format cyclonedx --output dist/adbgath.cdx.json
+      - run: adbgath sbom --format spdx --output dist/adbgath.spdx.json
+      - name: Generate SHA-256 release manifest
+        shell: python
+        run: |
+          import hashlib
+          import json
+          from pathlib import Path
+          files = []
+          for path in sorted(Path("dist").iterdir()):
+              if path.is_file():
+                  files.append({"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "size": path.stat().st_size})
+          Path("dist/release-manifest.json").write_text(json.dumps({"version":"3.6.0","files":files}, indent=2)+"\n", encoding="utf-8")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adbgath-3.6.0-supply-chain
+          path: dist/
+          if-no-files-found: error
