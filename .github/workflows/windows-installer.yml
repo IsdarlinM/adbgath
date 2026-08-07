@@ -18,6 +18,30 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Regression-test Python candidate rejection
+        shell: powershell
+        run: |
+          $source = Get-Content .\installers\windows\install.ps1 -Raw
+          $start = $source.IndexOf("function Test-Python311")
+          $end = $source.IndexOf("function Resolve-Python")
+          if ($start -lt 0 -or $end -le $start) { throw "Unable to extract Test-Python311 from installer." }
+          Invoke-Expression $source.Substring($start, $end - $start)
+
+          $fakePython = Join-Path $env:RUNNER_TEMP "fake-python.cmd"
+          @"
+          @echo off
+          echo Python 3.99 not found!
+          exit /b 103
+          "@ | Set-Content -Path $fakePython -Encoding ASCII
+
+          if (Test-Python311 $fakePython @()) {
+            throw "Unavailable Python candidates must never be accepted because they printed output."
+          }
+
+          $realPython = (Get-Command python.exe -ErrorAction Stop).Source
+          if (-not (Test-Python311 $realPython @())) {
+            throw "The available Python runtime was unexpectedly rejected."
+          }
       - name: Run current-user installer
         shell: powershell
         run: |
