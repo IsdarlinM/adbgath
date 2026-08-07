@@ -12,7 +12,10 @@ function Test-PathInsideInstallRoot {
     param([string]$Path)
     if (-not $Path) { return $false }
     try {
-        $full = [System.IO.Path]::GetFullPath($Path)
+        $full = [System.IO.Path]::GetFullPath($Path).TrimEnd('\')
+        if ($full.Equals($InstallRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
         $prefix = $InstallRoot + '\'
         return $full.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
     }
@@ -113,6 +116,13 @@ function Remove-TreeWithRetry {
     }
 
     throw "Unable to remove '$Path' after $Attempts attempts. Last error: $($lastError.Exception.Message)"
+}
+
+# A current working directory inside the installation can keep directory handles
+# alive on Windows. Move away before terminating processes and deleting the tree.
+$currentDirectory = (Get-Location).Path
+if (Test-PathInsideInstallRoot $currentDirectory) {
+    Set-Location ([System.IO.Path]::GetTempPath())
 }
 
 # Remove the managed installation first. Environment changes are intentionally
