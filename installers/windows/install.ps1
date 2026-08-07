@@ -37,8 +37,9 @@ function Get-VerifiedDownload([string]$Uri, [string]$Destination, [string]$Offli
 function Test-Python311([string]$Executable, [string[]]$PrefixArgs = @()) {
     try {
         $script = "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"
-        & $Executable @PrefixArgs -c $script 2>$null
-        return $LASTEXITCODE -eq 0
+        & $Executable @PrefixArgs -c $script *> $null
+        $exitCode = $LASTEXITCODE
+        return [bool]($exitCode -eq 0)
     } catch {
         return $false
     }
@@ -212,6 +213,9 @@ New-Item -ItemType Directory -Path $InstallRoot, $BinRoot -Force | Out-Null
 
 $python = Resolve-Python
 if (-not $python) { $python = Install-Python }
+if (-not (Test-Python311 $python.Exe $python.Args)) {
+    throw "Resolved Python candidate is not runnable or does not satisfy Python 3.11+."
+}
 Write-Step "Using Python: $($python.Exe) $($python.Args -join ' ')"
 
 if ((Test-Path $VenvRoot) -and $Force -and -not $Repair) { Remove-Item $VenvRoot -Recurse -Force }
