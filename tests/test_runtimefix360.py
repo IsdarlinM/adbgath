@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from adbgath.models import Device
 from adbgath.modules.wireless.manager import WirelessManager
+from adbgath.runtimefix360 import _hidden_process_kwargs
 from adbgath.webapp import create_app
 
 
@@ -86,3 +90,12 @@ def test_wireless_auto_connect_does_not_force_unknown_mdns_service(tmp_path: Pat
     assert result["connected"] == 0
     assert result["skipped"][0]["endpoint"] == "10.0.0.28:43005"
     assert adb.run_calls == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-specific subprocess flag")
+def test_windows_adb_processes_use_create_no_window():
+    flags = _hidden_process_kwargs().get("creationflags", 0)
+    assert flags & subprocess.CREATE_NO_WINDOW
+    grouped = _hidden_process_kwargs(process_group=True).get("creationflags", 0)
+    assert grouped & subprocess.CREATE_NO_WINDOW
+    assert grouped & subprocess.CREATE_NEW_PROCESS_GROUP
