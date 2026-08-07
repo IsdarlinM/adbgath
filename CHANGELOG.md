@@ -2,31 +2,35 @@
 
 All notable changes to ADB-Gath are documented here.
 
-## [3.4.0] - 2026-08-06
+## [3.6.0] - 2026-08-07
 
 ### Added
 
-- One-time Android Wireless Debugging QR pairing compatible with the AOSP `WIFI:T:ADB` payload and `studio-*` mDNS instance convention.
-- Secure CLI QR workflow with expiration, optional browser opening, optional auto-connect, cancellation, and default SVG deletion.
-- Professional Web QR workflow with no-store SVG delivery, countdown, live WebSocket status, cancellation, and automatic connection.
-- Shared ADB/mDNS event broker with bounded event history, ordered sequence numbers, device/service change events, and adaptive failure backoff.
-- Formal SQLite schema migrations with checksums, `PRAGMA user_version`, integrity validation, bounded pre-migration backups, and restoration on failure.
-- Incremental inventory capture, stable content digests, list/diff/watch commands, retention limits, and database-backed history.
-- Capability cache keyed by device and build fingerprint with explicit refresh support.
-- `adbgath schema` and Web `schema_status` operations.
-
-### Changed
-
-- Wireless WebSocket clients consume one shared broker instead of performing independent mDNS polling.
-- Capability cache metadata is deterministic so repeated snapshots do not produce false differences.
-- Inventory digests and comparisons ignore volatile capture timestamps.
-- FastAPI startup/shutdown management now uses the lifespan API.
+- Bounded asynchronous process supervisor with cancellation, timeout, output backpressure, and process-tree cleanup.
+- SHA-256 content-addressed artifact store with deduplication, compression, verification, migration, materialization, and garbage collection.
+- RBAC policy engine with viewer, analyst, operator, and administrator roles plus explicit approval for destructive remote jobs.
+- Tamper-evident hash-chained audit events.
+- Optional distributed mobile-security lab controller protected by mutual TLS and per-agent tokens.
+- Outbound-only Windows/Linux lab agents with operation allowlists and no arbitrary shell endpoint.
+- Local PKI tooling, agent enrollment, device pools, job queueing, heartbeat/capability reporting, and result collection.
+- Ed25519 plugin signing/verification and CycloneDX/SPDX SBOM generation.
+- Static/runtime evidence correlation command.
+- Distributed Lab Web UI for agents, jobs, policy checks, artifact integrity, and audit verification.
+- SQLite schema migration 360 for lab, policy, audit, and content-addressed artifact metadata.
 
 ### Security
 
-- QR secrets are generated with `secrets`, held only in memory, sent to ADB through standard input, and excluded from process arguments, JSON, SQLite, jobs, metrics, reports, presets, and logs.
-- QR SVG responses are same-origin, session-protected, CSP-constrained, and marked `Cache-Control: no-store`.
-- QR creation requires explicit authorized-target confirmation and cannot be queued as a persistent background job.
+- Remote controller transport requires mTLS; agent URLs must use HTTPS.
+- Agent authentication combines trusted client certificates with one-time enrollment tokens stored only as SHA-256 hashes on the controller.
+- Remote jobs are re-authorized by policy immediately before delivery to the agent.
+- Destructive remote operations require explicit approval and suitable RBAC role.
+- Private PKI/signing keys are written with restrictive file permissions where supported.
+- Agent tokens and private keys are excluded from audit events and normal listing APIs.
+
+### Validation
+
+- Added real loopback mTLS controller↔agent integration testing.
+- Added 3.6 tests for CAS deduplication/integrity, RBAC, audit tamper detection, Ed25519 signing, PKI, distributed jobs, async timeout handling, SBOM generation, and Web UI APIs.
 
 ## [3.3.0] - 2026-08-06
 
