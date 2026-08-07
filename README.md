@@ -11,25 +11,28 @@
 ADB-Gath
 Defensive ADB Toolkit
 ADB-Gathering
-Developer: IsdarlinM | Version: 3.4.0
+Developer: IsdarlinM | Version: 3.6.0
 Threat intel • Device forensics • Defensive ADB workflow
 ```
 
-**ADB-Gath 3.4.0** is a cross-platform Android assessment and evidence workspace for authorized security testing. It provides a native Windows/Linux CLI, a professional Web UI, persistent projects, reproducible evidence, static/runtime analysis, multi-device workflows, secure updates, and Android Wireless Debugging support.
+**ADB-Gath 3.6.0** is a cross-platform Android assessment, evidence, and optional distributed-lab workspace for authorized security testing. It provides a native Windows/Linux CLI, a professional Web UI, persistent projects, reproducible evidence, static/runtime analysis, multi-device workflows, secure updates, and Android Wireless Debugging support.
 
 > Use ADB-Gath only on devices, applications, accounts, and environments you own or are explicitly authorized to test.
 
-## 3.4.0 highlights
+## 3.6.0 highlights
 
-- Android 11+ Wireless Debugging through both **QR pairing** and **six-digit pairing code**.
-- AOSP-compatible QR payload: `WIFI:T:ADB;S:studio-<instance>;P:<secret>;;`.
-- QR secrets held only in memory and sent to `adb pair` through standard input.
-- Shared ADB/mDNS event broker for ordered device and service events.
-- Formal SQLite migrations with checksums, backups, integrity validation, and rollback.
-- Incremental inventory capture, history, comparison, watch mode, stable digests, and retention.
-- Cached device capabilities with explicit refresh.
-- Professional Wireless Web workspace with no-store QR delivery, WebSocket status, diagnostics, known targets, aliases, pairing, connection, and cancellation.
-- Existing 3.3 capabilities retained: Windows/Linux installers, transactional APK replacement, split APK/APKS/AAB support, evidence manifests, snapshots, reports, plugins, Frida observation, projects, jobs, and secure update rollback.
+- Preserves all 3.4 Wireless Debugging workflows: QR pairing, six-digit pairing, mDNS discovery, broker events, diagnostics, and Web UI.
+- Adds a bounded asynchronous subprocess supervisor with cancellation, timeout, output limits, and Windows/POSIX process-tree cleanup.
+- Adds a SHA-256 content-addressed artifact store with deduplication, optional compression, integrity verification, materialization, migration, and garbage collection.
+- Adds RBAC roles (`viewer`, `analyst`, `operator`, `administrator`) with explicit approval for destructive remote operations.
+- Adds an append-only SHA-256 hash-chained audit trail for policy decisions and distributed operations.
+- Adds an optional distributed lab controller using **mutual TLS (mTLS)** plus per-agent bearer tokens. Agents connect outbound to the controller and never expose an arbitrary shell or raw ADB endpoint.
+- Adds local PKI creation, controller certificates, agent enrollment, device pools, allowlisted distributed jobs, heartbeat/capability reporting, cancellation, and result collection.
+- Adds Ed25519 signing and verification for plugin artifacts.
+- Adds CycloneDX and SPDX SBOM generation for supply-chain visibility.
+- Adds a dedicated responsive Distributed Lab Web workspace for agents, jobs, policy decisions, artifact integrity, and audit-chain verification.
+- Extends formal SQLite migrations to schema version 360 while preserving backups and integrity validation.
+- Adds static/runtime evidence correlation and retains existing projects, snapshots, reports, APK/AAB analysis, Frida observation, and Windows/Linux installers.
 
 The original logo, banner, name, and visual identity are preserved.
 
@@ -40,10 +43,11 @@ Windows CLI ───────┐
 Linux CLI ─────────┼── Shared operation catalog ── AdbgathService ── AdbClient ── adb/adb.exe
 Web UI + Jobs ─────┘                    │
                                        ├── Wireless broker / QR coordinator
-                                       ├── Projects / SQLite migrations
-                                       ├── Rules / Plugins
-                                       ├── Evidence / Reports
-                                       └── APK / Bundle analysis
+                                       ├── Async process supervisor
+                                       ├── Projects / schema migrations / CAS evidence
+                                       ├── RBAC / audit / signed plugins
+                                       ├── Optional mTLS lab controller + outbound agents
+                                       └── APK / Bundle / static-runtime correlation
 ```
 
 Host processes use argument arrays with `shell=False`. The browser has no arbitrary shell or arbitrary ADB command endpoint.
@@ -157,6 +161,71 @@ adbgath wireless watch
 ```
 
 See [`docs/WIRELESS.md`](docs/WIRELESS.md).
+
+## Distributed lab (optional)
+
+The local CLI and Web UI remain the default. Distributed mode is opt-in and requires mTLS.
+
+Create a local CA and controller certificate:
+
+```bash
+adbgath lab pki-init --dir ./lab-pki
+adbgath lab controller-cert --dir ./lab-pki --host 127.0.0.1
+```
+
+Enroll an outbound agent:
+
+```bash
+adbgath lab agent-enroll lab-windows-01 --pki-dir ./lab-pki --controller https://127.0.0.1:9443
+```
+
+Start the controller using the generated certificate paths:
+
+```bash
+adbgath lab controller --host 127.0.0.1 --port 9443 --cert ./lab-pki/controller-adbgath-controller-cert.pem --key ./lab-pki/controller-adbgath-controller-key.pem --ca ./lab-pki/ca-cert.pem
+```
+
+On the enrolled worker, run the generated agent configuration:
+
+```bash
+adbgath lab agent-run --config ./lab-pki/agent-lab-windows-01.json
+```
+
+Submit only catalogued operations:
+
+```bash
+adbgath lab job-submit --agent lab-windows-01 --action devices --role viewer
+adbgath lab jobs
+adbgath audit verify
+```
+
+Distributed agents do not expose a shell and reject controller, updater, Web-server, and other non-agent operations. Destructive operations require an operator/administrator role plus explicit `--approved`.
+
+The local Web UI adds `/lab` for agents, jobs, policy checks, artifact integrity, and audit history.
+
+See [`docs/DISTRIBUTED_LAB.md`](docs/DISTRIBUTED_LAB.md).
+
+## Content-addressed evidence
+
+```bash
+adbgath artifact-store status
+adbgath artifact-store import --path evidence.log --project-id PROJECT
+adbgath artifact-store verify
+adbgath artifact-store gc            # dry-run
+adbgath artifact-store gc --apply    # remove only unreferenced objects
+```
+
+Identical SHA-256 content is stored once and referenced by logical project/session records.
+
+## Supply chain
+
+```bash
+adbgath sbom --format cyclonedx --output cyclonedx.json
+adbgath sbom --format spdx --output spdx.json
+adbgath plugin keygen --private-key publisher.key --public-key publisher.pub
+adbgath plugin sign --manifest plugin.json --plugin-file plugin.py --private-key publisher.key --output plugin.sig.json
+adbgath plugin verify --bundle plugin.sig.json --plugin-file plugin.py --public-key publisher.pub
+```
 
 ## Web UI
 
