@@ -60,6 +60,7 @@ def patch_cli(module: Any) -> None:
             p.add_argument("mode", nargs="?", choices=["holds","hold","release","seal","unseal"], default="holds")
             p.add_argument("--project-id"); p.add_argument("--reason"); p.add_argument("--actor", default="local-operator"); p.add_argument("--path"); p.add_argument("--output"); p.add_argument("--passphrase-env", default="ADBGATH_VAULT_PASSPHRASE")
 
+
         plugin = commands.get("plugin")
         if plugin:
             sub = next((a for a in plugin._actions if isinstance(a, argparse._SubParsersAction)), None)
@@ -67,7 +68,7 @@ def patch_cli(module: Any) -> None:
                 k = sub.add_parser("keygen", help="Generate Ed25519 plugin signing keys."); k.add_argument("--private-key", required=True); k.add_argument("--public-key", required=True)
                 s = sub.add_parser("sign", help="Sign a plugin manifest and file."); s.add_argument("--manifest", required=True); s.add_argument("--plugin-file", required=True); s.add_argument("--private-key", required=True); s.add_argument("--output", required=True)
                 v = sub.add_parser("verify", help="Verify an Ed25519 signed plugin bundle."); v.add_argument("--bundle", required=True); v.add_argument("--plugin-file", required=True); v.add_argument("--public-key", required=True)
-                sub.add_parser("publisher-list", help="List trusted plugin publishers.")
+                pl = sub.add_parser("publisher-list", help="List trusted plugin publishers.")
                 pa = sub.add_parser("publisher-add", help="Trust an Ed25519 publisher key."); pa.add_argument("name"); pa.add_argument("--public-key", required=True)
                 pr = sub.add_parser("publisher-revoke", help="Revoke a trusted plugin publisher."); pr.add_argument("name")
                 tv = sub.add_parser("verify-trusted", help="Verify a plugin against a trusted non-revoked publisher."); tv.add_argument("--bundle", required=True); tv.add_argument("--plugin-file", required=True); tv.add_argument("--publisher", required=True)
