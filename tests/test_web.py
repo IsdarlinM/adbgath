@@ -17,7 +17,7 @@ def test_web_bootstrap_and_allowed_action(service):
     bootstrap = client.get("/api/bootstrap")
     assert bootstrap.status_code == 200
     body = bootstrap.json()
-    assert body["version"] == "3.4.0"
+    assert body["version"] == "3.6.0"
     assert {item["name"] for item in body["operations"]} == set(WEB_ACTIONS)
 
     result = client.post("/api/execute", json={"action": "packages", "payload": {}})
