@@ -164,7 +164,7 @@ def test_evidence_manifest_hashes_redaction_and_project_links(service, tmp_path:
         session_id=session["id"],
     )
     manifest = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))
-    assert manifest["tool_version"] == "3.4.0"
+    assert manifest["tool_version"] == "3.6.0"
     assert manifest["artifacts"]
     assert Path(result["signature"]).is_file()
     assert (tmp_path / "evidence" / "screenshot.png").read_bytes().startswith(b"\x89PNG")
