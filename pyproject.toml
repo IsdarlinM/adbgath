@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adbgath"
-version = "3.4.0"
+version = "3.6.0"
 description = "Cross-platform defensive Android/ADB assessment toolkit with CLI and local web UI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,7 @@ dependencies = [
   "python-multipart>=0.0.20,<1.0",
   "reportlab>=4.2,<5",
   "qrcode>=8.2,<9",
+  "cryptography>=45,<48",
 ]
 
 [project.optional-dependencies]
