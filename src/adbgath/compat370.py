@@ -42,6 +42,9 @@ def apply() -> None:
     from .authorigin370 import patch_webapp as patch_auth_origin
     patch_auth_origin(webapp_module)
 
+    from .websocketexpiry370 import patch_webapp as patch_websocket_expiry
+    patch_websocket_expiry(webapp_module)
+
     from . import cli as cli_module
     from .cli370 import patch_cli as patch_auth_cli
     patch_auth_cli(cli_module)
