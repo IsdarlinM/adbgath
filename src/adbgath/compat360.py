@@ -57,3 +57,6 @@ def apply() -> None:
 
     from .webtheme360 import patch_webapp as patch_unified_web_theme
     patch_unified_web_theme(webapp_module)
+
+    from .integratedweb360 import patch_webapp as patch_integrated_web_sections
+    patch_integrated_web_sections(webapp_module)
