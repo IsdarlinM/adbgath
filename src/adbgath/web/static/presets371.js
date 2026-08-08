@@ -288,5 +288,6 @@
   document.addEventListener("DOMContentLoaded", () => {
     updateScopeHint();
     renderPresetSelectServer();
+    document.querySelector("#ux371ConfirmDialog")?.addEventListener("cancel", () => { serverConfirmAction = null; });
   });
 })();
