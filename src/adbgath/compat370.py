@@ -20,11 +20,15 @@ def apply() -> None:
     patch_auth_permissions(auth_module)
 
     from . import webapp as webapp_module
+    from . import webapp370 as webapp370_module
     from .webapp370 import patch_webapp as patch_auth_webapp
     patch_auth_webapp(webapp_module)
 
     from .serversecret370 import patch_webapp as patch_server_secret
     patch_server_secret(webapp_module)
+
+    from .csrfkey370 import patch_csrf_key
+    patch_csrf_key(webapp370_module)
 
     from .webauthz370 import patch_webapp as patch_web_authorization
     patch_web_authorization(webapp_module)
