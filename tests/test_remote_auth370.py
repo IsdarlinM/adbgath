@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from adbgath.webapp import create_app
 
 
-def test_authenticated_370_user_can_open_remote_dashboard_without_legacy_token_page(monkeypatch, tmp_path: Path, service):
+def test_remote_first_run_requires_startup_token(monkeypatch, tmp_path: Path, service):
     monkeypatch.setenv("ADBGATH_SERVER_HOME", str(tmp_path / "server-auth"))
     startup_token = "R" * 32
     app = create_app(service=service, remote_token=startup_token, secure_cookie=True)
@@ -16,6 +16,21 @@ def test_authenticated_370_user_can_open_remote_dashboard_without_legacy_token_p
         first = client.get("/")
         assert first.status_code == 200
         assert "Create the first administrator" in first.text
+        assert "Remote startup token" in first.text
+
+        denied = client.post(
+            "/auth/setup",
+            data={
+                "username": "admin370",
+                "password": "Admin-Password-370!",
+                "confirm_password": "Admin-Password-370!",
+                "startup_token": "wrong-startup-token-value",
+            },
+            follow_redirects=False,
+        )
+        assert denied.status_code == 403
+        assert "Invalid remote startup token" in denied.text
+        assert app.state.auth_store.has_users() is False
 
         setup = client.post(
             "/auth/setup",
@@ -23,6 +38,26 @@ def test_authenticated_370_user_can_open_remote_dashboard_without_legacy_token_p
                 "username": "admin370",
                 "password": "Admin-Password-370!",
                 "confirm_password": "Admin-Password-370!",
+                "startup_token": startup_token,
+            },
+            follow_redirects=False,
+        )
+        assert setup.status_code == 303
+
+
+def test_authenticated_370_user_can_open_remote_dashboard_without_legacy_token_page(monkeypatch, tmp_path: Path, service):
+    monkeypatch.setenv("ADBGATH_SERVER_HOME", str(tmp_path / "server-auth"))
+    startup_token = "R" * 32
+    app = create_app(service=service, remote_token=startup_token, secure_cookie=True)
+
+    with TestClient(app, base_url="https://testserver") as client:
+        setup = client.post(
+            "/auth/setup",
+            data={
+                "username": "admin370",
+                "password": "Admin-Password-370!",
+                "confirm_password": "Admin-Password-370!",
+                "startup_token": startup_token,
             },
             follow_redirects=False,
         )
@@ -42,15 +77,17 @@ def test_remote_auth_session_and_compatibility_cookie_survive_restart(monkeypatc
     first_app = create_app(service=service, remote_token=startup_token, secure_cookie=True)
 
     with TestClient(first_app, base_url="https://testserver") as first:
-        first.post(
+        setup = first.post(
             "/auth/setup",
             data={
                 "username": "admin370",
                 "password": "Admin-Password-370!",
                 "confirm_password": "Admin-Password-370!",
+                "startup_token": startup_token,
             },
             follow_redirects=False,
         )
+        assert setup.status_code == 303
         first.get("/")
         auth_cookie = first.cookies.get("adbgath_auth")
         legacy_cookie = first.cookies.get("adbgath_session")
