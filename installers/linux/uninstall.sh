@@ -12,5 +12,13 @@ for arg in "$@"; do
 done
 rm -f "$HOME/.local/bin/adbgath" "$HOME/.local/bin/adbgath-web"
 rm -rf "$INSTALL_ROOT"
-if [[ "$KEEP_WORKSPACE" != true ]]; then rm -rf "${ADBGATH_WORKSPACE:-$HOME/adbgath-workspace}"; fi
+if [[ "$KEEP_WORKSPACE" != true ]]; then
+  rm -rf "${ADBGATH_WORKSPACE:-$HOME/adbgath-workspace}"
+  if [[ -z "${ADBGATH_SERVER_HOME:-}" ]]; then
+    SERVER_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/adbgath/server"
+    rm -rf "$SERVER_ROOT"
+  else
+    printf 'Custom ADBGATH_SERVER_HOME preserved: %s\n' "$ADBGATH_SERVER_HOME"
+  fi
+fi
 printf 'adbgath was removed.\n'
