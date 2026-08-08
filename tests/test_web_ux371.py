@@ -60,6 +60,7 @@ def test_371_preset_ux_uses_custom_dialogs_and_never_native_prompt_or_alert():
 def test_371_presets_use_authenticated_server_workspace_and_exclude_secrets():
     javascript = (STATIC / "ux371.js").read_text(encoding="utf-8")
     presets = (STATIC / "presets371.js").read_text(encoding="utf-8")
+    assert "localStorage" not in javascript
     assert 'input.type = "password"' in javascript
     assert 'field.field_type === "secret"' in presets
     assert 'api("/api/presets")' in presets
@@ -112,11 +113,14 @@ def test_371_job_polling_stops_at_terminal_state_and_supports_multiple_jobs():
     javascript = (STATIC / "ux371.js").read_text(encoding="utf-8")
     assert "const watchedJobs = new Set()" in javascript
     assert "TERMINAL_JOB_STATES" in javascript
+    assert "let jobPollRunning = false" in javascript
+    assert "scheduleJobPoll" in javascript
     assert "watchedJobs.delete(jobId)" in javascript
-    assert "if (watchedJobs.size)" in javascript
-    assert "setTimeout(pollWatchedJobs" in javascript
+    assert "if (!job)" in javascript
+    assert "setTimeout(() =>" in javascript
     assert "setInterval(" not in javascript
     assert "document.hidden ? 3500 : 1200" in javascript
+    assert 'document.addEventListener("visibilitychange"' in javascript
 
 
 def test_371_command_center_has_inline_validation_busy_states_and_copy_output():
