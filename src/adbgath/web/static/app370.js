@@ -2,6 +2,7 @@
 
 (() => {
   const authState = {csrf: "", me: null};
+  const nativeFetch = window.fetch.bind(window);
   const q = selector => document.querySelector(selector);
 
   function readableDetail(detail, fallback) {
@@ -22,7 +23,7 @@
   async function rawJson(url, options = {}) {
     const isForm = options.body instanceof FormData;
     const headers = isForm ? {...(options.headers || {})} : {"Content-Type":"application/json", ...(options.headers || {})};
-    const response = await fetch(url, {credentials:"same-origin", ...options, headers});
+    const response = await nativeFetch(url, {credentials:"same-origin", ...options, headers});
     const data = await response.json().catch(() => ({ok:false, error:`HTTP ${response.status}`}));
     if (!response.ok || data.ok === false) {
       const message = readableDetail(data.error ?? data.detail, `HTTP ${response.status}`);
@@ -41,6 +42,22 @@
     authState.csrf = response.data?.csrf || "";
     return authState.me;
   }
+
+  async function authenticatedFetch(input, init = {}) {
+    const request = input instanceof Request ? input : null;
+    const method = String(init.method || request?.method || "GET").toUpperCase();
+    const target = new URL(request?.url || String(input), location.href);
+    if (target.origin !== location.origin || ["GET", "HEAD", "OPTIONS"].includes(method)) {
+      return nativeFetch(input, init);
+    }
+    if (!authState.csrf) await ensureAuthContext();
+    const headers = new Headers(request?.headers || undefined);
+    new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
+    headers.set("X-ADBGATH-CSRF", authState.csrf);
+    return nativeFetch(input, {...init, credentials:init.credentials || "same-origin", headers});
+  }
+
+  window.fetch = authenticatedFetch;
 
   async function api370(url, options = {}) {
     const method = String(options.method || "GET").toUpperCase();
@@ -88,9 +105,11 @@
   }
 
   async function selectWorkspace(workspaceId) {
-    const response = await api370(`/api/workspaces/${encodeURIComponent(workspaceId)}/select`, {method:"POST", body:"{}"});
-    authState.me.workspace = response.data;
-    location.reload();
+    try {
+      const response = await api370(`/api/workspaces/${encodeURIComponent(workspaceId)}/select`, {method:"POST", body:"{}"});
+      authState.me.workspace = response.data;
+      location.reload();
+    } catch (error) { showError(error); }
   }
 
   async function createWorkspace() {
@@ -132,18 +151,7 @@
         await loadUsers();
       } catch (error) { showError(error); }
     });
-    const reset = document.createElement("button");
-    reset.className = "secondary compact-btn";
-    reset.textContent = "Reset password";
-    reset.addEventListener("click", async () => {
-      const password = window.prompt(`New password for ${user.username} (minimum 12 characters):`);
-      if (password === null) return;
-      try {
-        await api370(`/api/auth/users/${encodeURIComponent(user.id)}/password`, {method:"POST", body:JSON.stringify({password})});
-        if (typeof toast === "function") toast(`Password reset for ${user.username}`);
-      } catch (error) { showError(error); }
-    });
-    actions.append(toggle, reset);
+    actions.append(toggle);
     row.append(info, actions);
     return row;
   }
@@ -173,8 +181,8 @@
     try {
       await api370("/api/auth/users", {method:"POST", body:JSON.stringify({username, display_name:displayName, role, password})});
       if (passwordInput) passwordInput.value = "";
-      q("#auth370NewUsername").value = "";
-      q("#auth370NewDisplay").value = "";
+      if (q("#auth370NewUsername")) q("#auth370NewUsername").value = "";
+      if (q("#auth370NewDisplay")) q("#auth370NewDisplay").value = "";
       if (typeof toast === "function") toast(`User ${username} created`);
       await loadUsers();
     } catch (error) { showError(error); }
