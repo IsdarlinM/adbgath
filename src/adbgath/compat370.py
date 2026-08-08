@@ -16,6 +16,9 @@ def apply() -> None:
     from .serverroot370 import patch_auth_root
     patch_auth_root(auth_module)
 
+    from .authpermissions370 import patch_auth_permissions
+    patch_auth_permissions(auth_module)
+
     from . import webapp as webapp_module
     from .webapp370 import patch_webapp as patch_auth_webapp
     patch_auth_webapp(webapp_module)
