@@ -16,6 +16,24 @@ If ADB-Gath detects an existing 3.6 workspace, that workspace is assigned to the
 
 After setup, every Web request requires an authenticated session.
 
+### Remote first-run bootstrap
+
+Non-loopback Web mode still requires TLS and a startup token:
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token 'LONG_STARTUP_TOKEN' \
+  --tls-cert ./server-cert.pem \
+  --tls-key ./server-key.pem
+```
+
+When no Web users exist yet, the remote setup form requires that same startup token in addition to the new administrator username/password. A remote client cannot claim the first administrator without knowing the configured startup token. Failed startup-token attempts are rate-limited per client.
+
+The startup token is not stored as a Web-user password and does not replace individual accounts. Once first-run setup is complete, operators authenticate with their own ADB-Gath Web usernames/passwords.
+
+Local loopback first-run setup does not require the additional startup-token field.
+
 ## Authentication model
 
 - Passwords are never stored in plaintext.
@@ -26,8 +44,9 @@ After setup, every Web request requires an authenticated session.
 - Cookies are `HttpOnly`, `SameSite=Strict`, and `Secure` when TLS is enabled.
 - Unsafe same-origin API requests require an `X-ADBGATH-CSRF` token bound to the authenticated session.
 - The CSRF HMAC key remains server-only; browser compatibility cookies contain only a one-way derived marker.
-- WebSocket endpoints resolve the authenticated user before binding an ADB-Gath workspace.
-- Non-loopback Web mode still requires the existing TLS and remote-startup safeguards.
+- Authentication setup/login forms validate same-origin `Origin`/`Referer` metadata when a browser provides it.
+- WebSocket endpoints resolve the authenticated user before binding an ADB-Gath workspace and long-lived sockets cannot outlive the authenticated session.
+- Non-loopback Web mode requires TLS and the existing remote-startup guard.
 
 The server-level identity registry is independent from assessment databases. Default locations are:
 
@@ -37,6 +56,8 @@ Linux:   ${XDG_DATA_HOME:-~/.local/share}/adbgath-server
 ```
 
 Override the server registry location with `ADBGATH_SERVER_HOME` when required.
+
+On POSIX systems ADB-Gath restricts the default registry/workspace directories and secret/database files to the service account where supported.
 
 ## Workspaces
 
@@ -60,6 +81,10 @@ Workspace IDs are random internal identifiers. Browser-supplied workspace IDs ar
 
 Background jobs capture the resolved `AdbgathService` for the active workspace before entering the worker thread. A later workspace switch or concurrent request from another user cannot retarget an already queued job.
 
+User/workspace creation uses serialized SQLite transactions. Duplicate user/workspace requests do not leave orphan workspace directories, and concurrent first-run setup attempts cannot create multiple initial administrators.
+
+Expired sessions are rejected and revoked before workspace-selection metadata can be mutated.
+
 Workspace isolation protects ADB-Gath data boundaries. It does not create per-user ACLs for the physical Android transports visible to the shared ADB server.
 
 ## User administration
@@ -69,6 +94,8 @@ Administrators receive a **Users** view in the main dashboard. It can:
 - list Web users;
 - create a user or another administrator;
 - enable/disable users.
+
+Web-only administrative operations are authorized from the authenticated server role. Browser-supplied Distributed Lab role claims cannot elevate a normal Web user to administrator authority.
 
 Password resets are available from the local CLI so administrators can avoid putting a new password in browser history or browser storage:
 
@@ -112,7 +139,7 @@ The frontend also normalizes FastAPI validation structures into readable message
 
 ## Logout and account disable
 
-Signing out deletes the current session. Disabling a user revokes every existing session for that account. The final enabled administrator cannot be disabled.
+Signing out deletes the current session. Disabling a user revokes every existing session for that account. Password resets revoke existing sessions. The final enabled administrator cannot be disabled.
 
 ## Uninstall behavior
 
@@ -123,7 +150,8 @@ The 3.7 server registry contains user records and isolated Web workspaces. Insta
 For access from another host:
 
 - keep the server behind TLS;
-- use a strong startup `--remote-token` as required by ADB-Gath's remote-mode guard;
+- use a strong startup `--remote-token` and protect it as a bootstrap secret;
+- complete first-run setup from a trusted administrative client;
 - create individual Web accounts instead of sharing a password;
 - do not expose the service directly to the public Internet;
 - keep `ADBGATH_SERVER_HOME` on a filesystem whose OS permissions are restricted to the ADB-Gath service account;
