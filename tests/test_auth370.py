@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 import pytest
@@ -86,3 +87,48 @@ def test_workspace_name_and_username_validation(tmp_path: Path):
         store.create_workspace(admin["id"], "")
     with pytest.raises(ValueError):
         store.create_user("valid-user", "short")
+
+
+def test_duplicate_records_do_not_leave_orphan_workspace_directories(tmp_path: Path):
+    store = AuthStore(tmp_path / "server")
+    admin = store.create_initial_admin("admin370", "Admin-Password-370!")
+    store.create_user("analyst370", "Analyst-Password-370!")
+    store.create_workspace(admin["id"], "Evidence")
+
+    before = {path for path in store.user_root.rglob("ws_*") if path.is_dir()}
+    with pytest.raises(ValueError, match="already exists"):
+        store.create_user("analyst370", "Another-Password-370!")
+    with pytest.raises(ValueError, match="already exists"):
+        store.create_workspace(admin["id"], "Evidence")
+    after = {path for path in store.user_root.rglob("ws_*") if path.is_dir()}
+    assert after == before
+
+
+def test_initial_admin_setup_is_serialized_across_store_instances(tmp_path: Path):
+    root = tmp_path / "server"
+    stores = [AuthStore(root), AuthStore(root)]
+    barrier = threading.Barrier(2)
+    successes: list[str] = []
+    failures: list[Exception] = []
+
+    def create(store: AuthStore, username: str) -> None:
+        try:
+            barrier.wait(timeout=3)
+            user = store.create_initial_admin(username, "Admin-Password-370!")
+            successes.append(user["username"])
+        except Exception as exc:
+            failures.append(exc)
+
+    threads = [
+        threading.Thread(target=create, args=(stores[0], "admin-one")),
+        threading.Thread(target=create, args=(stores[1], "admin-two")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert "Initial setup has already been completed" in str(failures[0])
+    assert len(stores[0].list_users()) == 1
