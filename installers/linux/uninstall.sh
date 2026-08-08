@@ -15,7 +15,7 @@ rm -rf "$INSTALL_ROOT"
 if [[ "$KEEP_WORKSPACE" != true ]]; then
   rm -rf "${ADBGATH_WORKSPACE:-$HOME/adbgath-workspace}"
   if [[ -z "${ADBGATH_SERVER_HOME:-}" ]]; then
-    SERVER_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/adbgath/server"
+    SERVER_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/adbgath-server"
     rm -rf "$SERVER_ROOT"
   else
     printf 'Custom ADBGATH_SERVER_HOME preserved: %s\n' "$ADBGATH_SERVER_HOME"
