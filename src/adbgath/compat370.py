@@ -22,6 +22,9 @@ def apply() -> None:
     from .authpermissions370 import patch_auth_permissions
     patch_auth_permissions(auth_module)
 
+    from .authatomic370 import patch_auth_atomic
+    patch_auth_atomic(auth_module)
+
     from . import webapp as webapp_module
     from . import webapp370 as webapp370_module
     from .webapp370 import patch_webapp as patch_auth_webapp
