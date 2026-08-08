@@ -46,13 +46,23 @@
     if (state) node.classList.add(state);
   }
 
-  function toggleAdvanced(force = null) {
+  function syncViewUrl(view, advanced = false) {
+    const url = new URL(location.href);
+    if (!view || view === "overview") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    if (view === "wireless-main" && advanced) url.searchParams.set("advanced", "1");
+    else url.searchParams.delete("advanced");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function toggleAdvanced(force = null, updateUrl = true) {
     const panel = q("#advancedWirelessPanel");
     const button = q("#toggleAdvancedWireless");
     if (!panel || !button) return;
     const show = force === null ? panel.classList.contains("hidden") : Boolean(force);
     panel.classList.toggle("hidden", !show);
     button.textContent = show ? "Hide advanced wireless controls" : "Advanced wireless controls";
+    if (updateUrl) syncViewUrl("wireless-main", show);
     if (show) panel.scrollIntoView({behavior:"smooth", block:"start"});
   }
 
@@ -204,10 +214,17 @@
     if (!view) return;
     const nav = q(`.nav-item[data-view="${CSS.escape(view)}"]`);
     if (nav) nav.click();
-    if (view === "wireless-main" && params.get("advanced") === "1") toggleAdvanced(true);
+    if (view === "wireless-main" && params.get("advanced") === "1") toggleAdvanced(true, false);
   }
 
   function wire() {
+    document.querySelectorAll(".nav-item[data-view]").forEach(nav => {
+      nav.addEventListener("click", () => {
+        const view = nav.dataset.view || "overview";
+        const advanced = view === "wireless-main" && !q("#advancedWirelessPanel")?.classList.contains("hidden");
+        syncViewUrl(view, advanced);
+      });
+    });
     q('[data-view="lab-main"]')?.addEventListener("click", () => {
       const title = q("#pageTitle");
       if (title) title.textContent = "Distributed Lab";
