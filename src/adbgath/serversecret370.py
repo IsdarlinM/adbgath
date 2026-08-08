@@ -4,44 +4,64 @@ import base64
 import hashlib
 import os
 import secrets
+import time
 from pathlib import Path
 from typing import Any
 
 _SECRET_BYTES = 32
+_SECRET_CREATE_RETRIES = 100
+_SECRET_CREATE_DELAY = 0.01
+
+
+def _restrict_permissions(root: Path, path: Path) -> None:
+    if os.name == "nt":
+        return
+    try:
+        root.chmod(0o700)
+    except OSError:
+        pass
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def _load_or_create(root: Path) -> bytes:
     root.mkdir(parents=True, exist_ok=True)
-    if os.name != "nt":
-        try:
-            root.chmod(0o700)
-        except OSError:
-            pass
     path = root / "server-secret.key"
-    try:
-        data = path.read_bytes()
-    except FileNotFoundError:
-        data = secrets.token_bytes(_SECRET_BYTES)
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        descriptor = os.open(path, flags, 0o600)
+    _restrict_permissions(root, path)
+
+    for _ in range(_SECRET_CREATE_RETRIES):
         try:
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(data)
-                handle.flush()
-                os.fsync(handle.fileno())
-        except Exception:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            data = secrets.token_bytes(_SECRET_BYTES)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
             try:
-                path.unlink(missing_ok=True)
-            finally:
-                raise
-    if len(data) != _SECRET_BYTES:
-        raise RuntimeError("ADB-Gath server secret has an invalid length.")
-    if os.name != "nt":
-        try:
-            path.chmod(0o600)
-        except OSError:
-            pass
-    return data
+                descriptor = os.open(path, flags, 0o600)
+            except FileExistsError:
+                time.sleep(_SECRET_CREATE_DELAY)
+                continue
+            try:
+                with os.fdopen(descriptor, "wb") as handle:
+                    handle.write(data)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            except Exception:
+                try:
+                    path.unlink(missing_ok=True)
+                finally:
+                    raise
+            _restrict_permissions(root, path)
+            return data
+        if len(data) == _SECRET_BYTES:
+            _restrict_permissions(root, path)
+            return data
+        # A competing creator may have created the file but not finished its
+        # write/fsync yet. Retry briefly before treating it as corrupted.
+        time.sleep(_SECRET_CREATE_DELAY)
+
+    raise RuntimeError("ADB-Gath server secret has an invalid length or could not be initialized safely.")
 
 
 def _legacy_marker(secret: bytes) -> str:
