@@ -2,6 +2,46 @@
 
 All notable changes to ADB-Gath are documented here.
 
+## [3.7.1] - 2026-08-08
+
+### Added
+
+- A themed ADB-Gath `<dialog>` workflow for saving/replacing Command Center presets instead of using the browser's native prompt UI.
+- Server-side preset storage scoped to the authenticated Web user and active workspace.
+- Themed confirmation dialogs for deleting presets, cancelling background jobs, and clearing the device log buffer.
+- Inline Command Center validation with focus/scroll to the first invalid field.
+- Busy/disabled states for operation execution, Security Audit, MASTG bundle generation, and package loading.
+- Copy-to-clipboard controls for structured output consoles.
+- ARIA live-region behavior for Web notifications and keyboard-compatible dialog handling.
+
+### Changed
+
+- Legacy browser presets are migrated into the active authenticated workspace; browser data is restored if migration cannot complete.
+- Secret operation fields render as password inputs and are excluded from preset payloads before network submission.
+- Watched-job polling supports multiple simultaneous jobs, stops after terminal states, and backs off while the browser tab is hidden.
+- The Command Center now shows the active user/workspace preset scope explicitly.
+
+### Fixed
+
+- Removed the runtime dependency on `window.prompt()` for preset names.
+- Fixed the previous job-watcher pattern that could recreate polling after a job had already reached a terminal state.
+- Reduced accidental duplicate operation/job submissions from repeated button clicks.
+- Pending preset-delete confirmation state is cleared when a dialog is cancelled with Escape.
+
+### Security
+
+- Preset records are stored in the server identity registry under `user_id + workspace_id`, rather than relying on browser local-storage namespaces as an access boundary.
+- The server validates preset actions/fields against the shared operation catalog.
+- Fields declared as `secret` are stripped again server-side as defense in depth.
+- A preset ID from one user/workspace cannot be listed or deleted through another authenticated scope.
+
+### Validation
+
+- Added server-store regressions for per-user/workspace isolation, case-insensitive replacement, and cross-scope deletion denial.
+- Added Web API regression coverage that saves a Wireless pairing preset containing a test pairing code and verifies that the secret is absent from the persisted/returned record.
+- Added second-workspace preset isolation and delete regressions.
+- Added source/HTML regressions for dialog assets, script ordering, secret masking, inline validation, job polling, busy states, and output copy controls.
+
 ## [3.7.0] - 2026-08-08
 
 ### Added
