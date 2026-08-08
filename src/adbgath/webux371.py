@@ -14,7 +14,7 @@ UX_DIALOGS = r'''
     <p>Save the current Command Center fields for quick reuse. Sensitive fields are deliberately excluded.</p>
     <label><span>PRESET NAME</span><input id="ux371PresetName" maxlength="80" autocomplete="off" required></label>
     <div class="ux371-scope-card">Scope: <strong id="ux371PresetScopeLabel">current user / workspace</strong></div>
-    <div id="ux371PresetSaveStatus" class="ux371-dialog-note">Only declared non-secret operation fields are stored locally.</div>
+    <div id="ux371PresetSaveStatus" class="ux371-dialog-note">Only declared non-secret operation fields are stored in the authenticated workspace.</div>
     <div class="execute-row">
       <button type="button" class="secondary" data-ux371-close>Cancel</button>
       <button id="ux371PresetSaveConfirm" type="submit" class="primary">Save preset</button>
@@ -62,6 +62,8 @@ def _upgrade_html(response: Any) -> Any:
                 html = html.replace("</body>", UX_DIALOGS + "\n</body>", 1)
         if "/static/ux371.js" not in html:
             html = html.replace("</body>", '  <script src="/static/ux371.js" defer></script>\n</body>', 1)
+        if "/static/presets371.js" not in html:
+            html = html.replace("</body>", '  <script src="/static/presets371.js" defer></script>\n</body>', 1)
     response.body = html.encode("utf-8")
     response.headers["content-length"] = str(len(response.body))
     return response
