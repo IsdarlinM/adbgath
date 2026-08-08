@@ -16,6 +16,9 @@ def apply() -> None:
     from .serverroot370 import patch_auth_root
     patch_auth_root(auth_module)
 
+    from .passwordkdf370 import patch_password_kdf
+    patch_password_kdf(auth_module)
+
     from .authpermissions370 import patch_auth_permissions
     patch_auth_permissions(auth_module)
 
