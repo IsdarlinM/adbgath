@@ -69,8 +69,13 @@ jobs:
           Start-Sleep -Milliseconds 500
           if ($locked.HasExited) { throw "Lock-test process exited before uninstall regression could run." }
 
+          $serverRoot = Join-Path $env:LOCALAPPDATA "adbgath\server"
+          New-Item -ItemType Directory -Path $serverRoot -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $serverRoot "3.7-uninstall-marker.txt") -Value "test"
+
           & .\installers\windows\uninstall.ps1 -InstallRoot $root
           if (Test-Path $root) { throw "Installer root still exists after uninstall." }
+          if (Test-Path $serverRoot) { throw "Default 3.7 Web server data root still exists after full uninstall." }
           Start-Sleep -Milliseconds 250
           if (Get-Process -Id $locked.Id -ErrorAction SilentlyContinue) {
             throw "Managed process is still running after uninstall."
