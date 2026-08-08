@@ -128,3 +128,55 @@ def fake_adb(tmp_path: Path) -> FakeAdb:
 @pytest.fixture()
 def service(fake_adb: FakeAdb, tmp_path: Path) -> AdbgathService:
     return AdbgathService(fake_adb, workspace=tmp_path / "workspace")
+
+
+@pytest.fixture(autouse=True)
+def isolate_370_web_auth_for_tests(monkeypatch, tmp_path: Path, request):
+    """Keep old Web regression tests authenticated without weakening production code.
+
+    Tests whose filename contains `370` exercise the real unauthenticated/authenticated
+    transitions themselves and therefore do not receive automatic setup/CSRF.
+    """
+    monkeypatch.setenv("ADBGATH_SERVER_HOME", str(tmp_path / "web-auth-server"))
+    if "370.py" in request.node.nodeid:
+        yield
+        return
+
+    from fastapi.testclient import TestClient
+
+    original_request = TestClient.request
+    username = "pytest-admin"
+    password = "Pytest-Admin-Password-370!"
+
+    def authenticated_request(client, method, url, *args, **kwargs):
+        app = getattr(client, "app", None)
+        auth_store = getattr(getattr(app, "state", None), "auth_store", None)
+        if auth_store is not None and not str(url).startswith("/auth/"):
+            if not auth_store.has_users():
+                original_request(
+                    client,
+                    "POST",
+                    "/auth/setup",
+                    data={"username": username, "password": password, "confirm_password": password},
+                    follow_redirects=False,
+                )
+            elif not client.cookies.get("adbgath_auth"):
+                original_request(
+                    client,
+                    "POST",
+                    "/auth/login",
+                    data={"username": username, "password": password},
+                    follow_redirects=False,
+                )
+
+            verb = str(method).upper()
+            if str(url).startswith("/api/") and verb not in {"GET", "HEAD", "OPTIONS"}:
+                me = original_request(client, "GET", "/api/auth/me")
+                if me.status_code == 200:
+                    headers = dict(kwargs.get("headers") or {})
+                    headers.setdefault("X-ADBGATH-CSRF", me.json()["data"]["csrf"])
+                    kwargs["headers"] = headers
+        return original_request(client, method, url, *args, **kwargs)
+
+    monkeypatch.setattr(TestClient, "request", authenticated_request)
+    yield
