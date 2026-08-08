@@ -66,35 +66,40 @@ def patch_cli(module: Any) -> None:
         return parser
 
     def run(args):
-        if args.command == "web-user":
-            store = AuthStore()
-            mode = args.web_user_mode
-            if mode == "list":
-                return store.list_users()
-            user = store.find_user(args.username) if mode != "add" else None
-            if mode == "add":
-                if not store.has_users() and args.role != "administrator":
-                    raise ValueError("The first Web user must be created with --role administrator.")
-                return store.create_user(
-                    args.username,
-                    _password(args.password_env),
-                    role=args.role,
-                    display_name=args.display_name,
-                )
-            if mode == "reset-password":
-                store.reset_password(user["id"], _password(args.password_env))
-                return {"ok": True, "username": user["username"], "sessions_revoked": True}
-            if mode == "disable":
-                return store.set_user_disabled(user["id"], True)
-            if mode == "enable":
-                return store.set_user_disabled(user["id"], False)
-        if args.command == "web-workspace":
-            store = AuthStore()
-            user = store.find_user(args.username)
-            if args.web_workspace_mode == "list":
-                return store.list_workspaces(user["id"])
-            if args.web_workspace_mode == "create":
-                return store.create_workspace(user["id"], args.name)
+        try:
+            if args.command == "web-user":
+                store = AuthStore()
+                mode = args.web_user_mode
+                if mode == "list":
+                    return store.list_users()
+                user = store.find_user(args.username) if mode != "add" else None
+                if mode == "add":
+                    if not store.has_users() and args.role != "administrator":
+                        raise ValueError("The first Web user must be created with --role administrator.")
+                    return store.create_user(
+                        args.username,
+                        _password(args.password_env),
+                        role=args.role,
+                        display_name=args.display_name,
+                    )
+                if mode == "reset-password":
+                    store.reset_password(user["id"], _password(args.password_env))
+                    return {"ok": True, "username": user["username"], "sessions_revoked": True}
+                if mode == "disable":
+                    return store.set_user_disabled(user["id"], True)
+                if mode == "enable":
+                    return store.set_user_disabled(user["id"], False)
+            if args.command == "web-workspace":
+                store = AuthStore()
+                user = store.find_user(args.username)
+                if args.web_workspace_mode == "list":
+                    return store.list_workspaces(user["id"])
+                if args.web_workspace_mode == "create":
+                    return store.create_workspace(user["id"], args.name)
+        except KeyError as exc:
+            raise module.AdbgathError(f"Web user or workspace was not found: {exc.args[0]}") from exc
+        except ValueError as exc:
+            raise module.AdbgathError(str(exc)) from exc
         return original_run(args)
 
     module.build_parser = build_parser
