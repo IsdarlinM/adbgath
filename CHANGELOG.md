@@ -2,6 +2,41 @@
 
 All notable changes to ADB-Gath are documented here.
 
+## [3.7.0] - 2026-08-08
+
+### Added
+
+- First-party Web users with administrator and user roles.
+- Per-user isolated Web workspace namespaces with an explicit workspace selector in the dashboard.
+- First-run administrator setup and migration of an existing 3.6 workspace to the first administrator without moving its files.
+- `adbgath web-user` commands for user listing, creation, password reset, disable, and enable.
+- `adbgath web-workspace` commands for listing and creating a user's Web workspaces.
+- Tenant-aware background job managers so queued work remains bound to the workspace selected when it was submitted.
+
+### Fixed
+
+- Security Audit and MASTG Web actions now use an explicit tenant-aware `/api/jobs` contract instead of the legacy validation boundary that could return HTTP 422.
+- FastAPI structured validation errors are rendered as readable messages instead of `[object Object]` browser toasts.
+- Existing Wireless, QR, Distributed Lab, uploads, jobs, and other first-party Web modules receive the 3.7 CSRF header transparently.
+
+### Security
+
+- Passwords use scrypt with per-user random salts; plaintext passwords are never stored.
+- Browser session tokens are random and only SHA-256 token hashes are stored in SQLite.
+- Authenticated unsafe API requests require a session-bound HMAC CSRF token.
+- WebSocket endpoints resolve the authenticated session before binding a workspace context.
+- Workspace selection is owner-scoped, including background jobs and artifact/project databases.
+- Disabling a user or resetting a password revokes that user's sessions.
+- The final enabled administrator cannot be disabled.
+- A persistent restricted server secret keeps compatibility and CSRF signing state stable across Web-server restarts.
+
+### Validation
+
+- Added authentication-store tests for password/session hashing, revocation, workspace ownership, and administrator safety.
+- Added Web integration tests for setup, login, CSRF, user isolation, workspace switching, logout, and cross-user denial.
+- Added explicit regression tests that queue and complete both `security` and `mastg` Web jobs without HTTP 422.
+- Added CLI parser coverage for the new Web user and workspace administration commands.
+
 ## [3.6.0] - 2026-08-07
 
 ### Added
