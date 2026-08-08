@@ -18,23 +18,29 @@ All notable changes to ADB-Gath are documented here.
 - Security Audit and MASTG Web actions now use an explicit tenant-aware `/api/jobs` contract instead of the legacy validation boundary that could return HTTP 422.
 - FastAPI structured validation errors are rendered as readable messages instead of `[object Object]` browser toasts.
 - Existing Wireless, QR, Distributed Lab, uploads, jobs, and other first-party Web modules receive the 3.7 CSRF header transparently.
+- User/workspace provisioning is transactionally serialized so duplicate records do not leave orphan workspace directories and concurrent first-run setup cannot create multiple initial administrators.
+- Persistent server-secret creation tolerates concurrent Web-server startup without exposing partially initialized key material.
+- Expired sessions are revoked before workspace selection can update active-workspace or last-used metadata.
 
 ### Security
 
-- Passwords use scrypt with per-user random salts; plaintext passwords are never stored.
+- Passwords use scrypt with per-user random salts and the 3.7 profile `N=2^15`, `r=8`, `p=3`; plaintext passwords are never stored.
 - Browser session tokens are random and only SHA-256 token hashes are stored in SQLite.
-- Authenticated unsafe API requests require a session-bound HMAC CSRF token.
-- WebSocket endpoints resolve the authenticated session before binding a workspace context.
+- Authenticated unsafe API requests require a session-bound HMAC CSRF token whose signing key remains server-only.
+- Authentication forms validate same-origin `Origin`/`Referer` information when provided by the browser.
+- WebSocket endpoints resolve the authenticated session before binding a workspace context and enforce session expiry for long-lived connections.
 - Workspace selection is owner-scoped, including background jobs and artifact/project databases.
+- Web administrative operations are bound to the authenticated server role instead of browser-supplied role claims.
 - Disabling a user or resetting a password revokes that user's sessions.
 - The final enabled administrator cannot be disabled.
-- A persistent restricted server secret keeps compatibility and CSRF signing state stable across Web-server restarts.
+- Server registry directories and secret/database files receive restrictive POSIX permissions where supported.
 
 ### Validation
 
-- Added authentication-store tests for password/session hashing, revocation, workspace ownership, and administrator safety.
-- Added Web integration tests for setup, login, CSRF, user isolation, workspace switching, logout, and cross-user denial.
+- Added authentication-store tests for password/session hashing, revocation, workspace ownership, administrator safety, duplicate cleanup, and concurrent initial setup.
+- Added Web integration tests for setup, login, CSRF, user isolation, workspace switching, logout, cross-user denial, authentication-origin checks, and WebSocket session expiry.
 - Added explicit regression tests that queue and complete both `security` and `mastg` Web jobs without HTTP 422.
+- Added concurrent server-secret initialization and expired-session workspace-mutation regressions.
 - Added CLI parser coverage for the new Web user and workspace administration commands.
 
 ## [3.6.0] - 2026-08-07
