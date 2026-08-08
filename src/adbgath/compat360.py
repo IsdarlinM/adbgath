@@ -51,3 +51,6 @@ def apply() -> None:
 
     from .runtimefix360 import apply_runtime_fixes
     apply_runtime_fixes()
+
+    from .dashboardpairing360 import patch_webapp as patch_dashboard_pairing
+    patch_dashboard_pairing(webapp_module)
