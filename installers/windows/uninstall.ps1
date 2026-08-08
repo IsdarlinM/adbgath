@@ -156,6 +156,17 @@ if (-not $KeepWorkspace) {
     if (Test-Path -LiteralPath $workspace) {
         Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction Stop
     }
+
+    if ($env:ADBGATH_SERVER_HOME) {
+        Write-Host "[adbgath] Custom ADBGATH_SERVER_HOME preserved: $env:ADBGATH_SERVER_HOME"
+    }
+    else {
+        $serverRoot = Join-Path $env:LOCALAPPDATA "adbgath\server"
+        if (Test-Path -LiteralPath $serverRoot) {
+            Write-Host "[adbgath] Removing Web users and isolated workspaces from $serverRoot"
+            Remove-TreeWithRetry -Path $serverRoot
+        }
+    }
 }
 
 Write-Host "adbgath was removed. Open a new terminal to refresh PATH." -ForegroundColor Green
