@@ -32,7 +32,7 @@ The server-level identity registry is independent from assessment databases. Def
 
 ```text
 Windows: %LOCALAPPDATA%\adbgath\server
-Linux:   ${XDG_DATA_HOME:-~/.local/share}/adbgath/server
+Linux:   ${XDG_DATA_HOME:-~/.local/share}/adbgath-server
 ```
 
 Override the server registry location with `ADBGATH_SERVER_HOME` when required.
