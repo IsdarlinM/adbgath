@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import threading
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from adbgath.serversecret370 import _load_or_create
 from adbgath.webapp import create_app
 
 
@@ -67,3 +69,29 @@ def test_session_and_csrf_remain_valid_across_web_restart(monkeypatch, tmp_path:
             headers={"X-ADBGATH-CSRF": csrf},
         )
         assert created.status_code == 200
+
+
+def test_server_secret_initialization_is_race_safe(tmp_path: Path):
+    root = tmp_path / "server-auth"
+    barrier = threading.Barrier(8)
+    values: list[bytes] = []
+    errors: list[Exception] = []
+
+    def load() -> None:
+        try:
+            barrier.wait(timeout=3)
+            values.append(_load_or_create(root))
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=load) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not errors
+    assert len(values) == 8
+    assert len(set(values)) == 1
+    assert len(values[0]) == 32
+    assert (root / "server-secret.key").read_bytes() == values[0]
