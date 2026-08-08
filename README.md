@@ -11,46 +11,46 @@
 ADB-Gath
 Defensive ADB Toolkit
 ADB-Gathering
-Developer: IsdarlinM | Version: 3.6.0
+Developer: IsdarlinM | Version: 3.7.0
 Threat intel • Device forensics • Defensive ADB workflow
 ```
 
-**ADB-Gath 3.6.0** is a cross-platform Android assessment, evidence, and optional distributed-lab workspace for authorized security testing. It provides a native Windows/Linux CLI, a professional Web UI, persistent projects, reproducible evidence, static/runtime analysis, multi-device workflows, secure updates, and Android Wireless Debugging support.
+**ADB-Gath 3.7.0** is a cross-platform Android assessment, evidence, and optional distributed-lab workspace for authorized security testing. It provides a native Windows/Linux CLI, an authenticated multi-workspace Web UI, Android Wireless Debugging, persistent projects, reproducible evidence, static/runtime analysis, secure updates, and an optional mTLS distributed lab.
 
 > Use ADB-Gath only on devices, applications, accounts, and environments you own or are explicitly authorized to test.
 
-## 3.6.0 highlights
+## 3.7.0 highlights
 
-- Preserves all 3.4 Wireless Debugging workflows: QR pairing, six-digit pairing, mDNS discovery, broker events, diagnostics, and Web UI.
-- Adds a bounded asynchronous subprocess supervisor with cancellation, timeout, output limits, and Windows/POSIX process-tree cleanup.
-- Adds a SHA-256 content-addressed artifact store with deduplication, optional compression, integrity verification, materialization, migration, and garbage collection.
-- Adds RBAC roles (`viewer`, `analyst`, `operator`, `administrator`) with explicit approval for destructive remote operations.
-- Adds an append-only SHA-256 hash-chained audit trail for policy decisions and distributed operations.
-- Adds an optional distributed lab controller using **mutual TLS (mTLS)** plus per-agent bearer tokens. Agents connect outbound to the controller and never expose an arbitrary shell or raw ADB endpoint.
-- Adds local PKI creation, controller certificates, agent enrollment, device pools, allowlisted distributed jobs, heartbeat/capability reporting, cancellation, and result collection.
-- Adds Ed25519 signing and verification for plugin artifacts.
-- Adds CycloneDX and SPDX SBOM generation for supply-chain visibility.
-- Adds a dedicated responsive Distributed Lab Web workspace for agents, jobs, policy decisions, artifact integrity, and audit-chain verification.
-- Extends formal SQLite migrations to schema version 360 while preserving backups and integrity validation.
-- Adds static/runtime evidence correlation and retains existing projects, snapshots, reports, APK/AAB analysis, Frida observation, and Windows/Linux installers.
+- Adds first-party Web user authentication with `user` and `administrator` server roles.
+- Adds isolated per-user Web workspaces with an explicit workspace selector in the main top bar.
+- Migrates an existing meaningful 3.6 workspace to the first administrator without moving its files.
+- Stores passwords using scrypt with random salts; plaintext passwords are never stored.
+- Stores only SHA-256 hashes of browser session tokens and revokes sessions after password reset/disable.
+- Adds session-bound CSRF protection to unsafe Web API requests while preserving existing Wireless/Lab modules.
+- Makes background jobs workspace-aware so users and concurrent requests cannot cross workspace boundaries.
+- Fixes Security Audit and MASTG Web job submission returning HTTP 422.
+- Renders structured validation failures as readable text instead of `[object Object]`.
+- Adds `web-user` and `web-workspace` administration commands.
+- Preserves all 3.6 features: bounded async processes, content-addressed evidence, RBAC/audit, Ed25519 plugins, SBOMs, integrated Distributed Lab, QR/code pairing, and the unified green Web theme.
 
 The original logo, banner, name, and visual identity are preserved.
 
 ## Architecture
 
 ```text
-Windows CLI ───────┐
-Linux CLI ─────────┼── Shared operation catalog ── AdbgathService ── AdbClient ── adb/adb.exe
-Web UI + Jobs ─────┘                    │
-                                       ├── Wireless broker / QR coordinator
-                                       ├── Async process supervisor
-                                       ├── Projects / schema migrations / CAS evidence
-                                       ├── RBAC / audit / signed plugins
-                                       ├── Optional mTLS lab controller + outbound agents
-                                       └── APK / Bundle / static-runtime correlation
+Windows CLI ───────────┐
+Linux CLI ─────────────┼── Shared operation catalog ── AdbgathService ── AdbClient ── adb/adb.exe
+Authenticated Web UI ──┤              │
+Per-user Web jobs ─────┘              ├── User/workspace context
+                                      ├── Wireless broker / QR coordinator
+                                      ├── Async process supervisor
+                                      ├── Projects / SQLite / CAS evidence
+                                      ├── RBAC / audit / signed plugins
+                                      ├── Optional mTLS lab controller + outbound agents
+                                      └── APK / Bundle / static-runtime correlation
 ```
 
-Host processes use argument arrays with `shell=False`. The browser has no arbitrary shell or arbitrary ADB command endpoint.
+The browser has no arbitrary shell endpoint and no raw arbitrary ADB command endpoint.
 
 ## Requirements
 
@@ -58,7 +58,7 @@ Required:
 
 - Python 3.11 or newer.
 - Android SDK Platform-Tools (`adb`).
-- An authorized Android device or emulator.
+- An authorized Android device or emulator for device operations.
 
 Optional:
 
@@ -84,19 +84,13 @@ adbgath devices
 adbgath web
 ```
 
+The installer manages its Python environment and Platform-Tools and configures the command path. See [`docs/WINDOWS.md`](docs/WINDOWS.md).
+
 Portable mode:
 
 ```bat
 installers\windows\portable.cmd
 ```
-
-Uninstall while retaining projects and evidence:
-
-```bat
-installers\windows\uninstall.cmd -KeepWorkspace
-```
-
-See [`docs/WINDOWS.md`](docs/WINDOWS.md).
 
 ## Linux installation
 
@@ -111,37 +105,122 @@ Portable mode:
 ./installers/linux/portable.sh ./portable-adbgath
 ```
 
+## Web authentication: first run
+
+Start the server:
+
+```bash
+adbgath web
+```
+
+On the first browser visit, ADB-Gath asks you to create the first administrator. Passwords must contain at least 12 characters.
+
+If an existing 3.6 workspace is detected, the setup page identifies it and assigns it to the first administrator without relocating the workspace.
+
+After setup, the dashboard requires username/password authentication.
+
+Default server identity/workspace-registry locations:
+
+```text
+Windows: %LOCALAPPDATA%\adbgath\server
+Linux:   ${XDG_DATA_HOME:-~/.local/share}/adbgath/server
+```
+
+Override with:
+
+```text
+ADBGATH_SERVER_HOME
+```
+
+See [`docs/WEB_AUTH_3_7.md`](docs/WEB_AUTH_3_7.md).
+
+## Web workspace selector
+
+The main top bar now contains separate concepts:
+
+```text
+TARGET DEVICE   -> selected ADB device
+PROFILE         -> Android user/profile (current, 0, work profile, ...)
+WORKSPACE       -> ADB-Gath assessment workspace for the logged-in Web user
+```
+
+Use the **WORKSPACE** dropdown to switch. Use `+` to create a new isolated workspace.
+
+Each new Web user receives a separate default workspace namespace. Jobs, projects, snapshots, findings, reports and workspace database records resolve against the authenticated user's active workspace.
+
+## Web user administration
+
+Administrators receive a **Users** section inside the same dashboard shell.
+
+Local CLI administration:
+
+```bash
+adbgath web-user list
+adbgath web-user add analyst --role user
+adbgath web-user add backup-admin --role administrator
+adbgath web-user reset-password analyst
+adbgath web-user disable analyst
+adbgath web-user enable analyst
+```
+
+Do not place passwords directly on a command line. Prompt securely, or use a short-lived environment variable:
+
+```bash
+ADBGATH_NEW_PASSWORD='replace-this-secret' \
+  adbgath web-user add analyst --role user --password-env ADBGATH_NEW_PASSWORD
+```
+
+Workspaces can also be prepared administratively:
+
+```bash
+adbgath web-workspace list analyst
+adbgath web-workspace create analyst "Android 16 assessment"
+```
+
+## Remote Web mode
+
+Local loopback remains the default. Non-loopback mode requires the existing remote startup guard plus TLS:
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token 'use-a-long-startup-secret-here' \
+  --tls-cert ./server-cert.pem \
+  --tls-key ./server-key.pem
+```
+
+Web users still authenticate with individual accounts after the server starts. Do not expose ADB-Gath directly to the public Internet.
+
 ## Wireless Debugging
 
-### Pair with QR
+### QR pairing
 
-On Android, open **Developer options → Wireless debugging → Pair device with QR code**, then run:
+On Android open **Developer options → Wireless debugging → Pair device with QR code**. In the main Web UI select **Wireless → QR pairing**, or use:
 
 ```bash
 adbgath wireless qr
 ```
 
-Options:
+Useful options:
 
 ```bash
 adbgath wireless qr --timeout 180
 adbgath wireless qr --no-auto-connect
 adbgath wireless qr --output ./pairing.svg --open
-adbgath wireless broker status
 ```
 
-The QR session expires automatically. The secret is excluded from command arguments, SQLite, jobs, metrics, reports, browser storage, and logs.
+QR secrets remain ephemeral and are excluded from command arguments, SQLite jobs, reports and browser storage.
 
-### Pair with six-digit code
+### Six-digit pairing code
 
-On Android, select **Pair device with pairing code** and keep the dialog open:
+On Android select **Pair device with pairing code**:
 
 ```bash
 adbgath wireless discover
 adbgath wireless pair 192.168.1.50:37123
 ```
 
-After pairing, connect to the separate connection endpoint shown by Android:
+Then connect using the separate connection endpoint shown by Android:
 
 ```bash
 adbgath wireless connect 192.168.1.50:41267
@@ -149,7 +228,7 @@ adbgath wireless connect 192.168.1.50:41267
 
 The pairing and connection ports normally differ.
 
-Other commands:
+Additional operations:
 
 ```bash
 adbgath wireless status
@@ -160,145 +239,165 @@ adbgath wireless auto-connect
 adbgath wireless watch
 ```
 
-See [`docs/WIRELESS.md`](docs/WIRELESS.md).
+Advanced Wireless controls remain integrated inside the main dashboard. See [`docs/WIRELESS.md`](docs/WIRELESS.md).
 
-## Distributed lab (optional)
+## Security Audit and MASTG
 
-The local CLI and Web UI remain the default. Distributed mode is opt-in and requires mTLS.
-
-Create a local CA and controller certificate:
+CLI:
 
 ```bash
-adbgath lab pki-init --dir ./lab-pki
-adbgath lab controller-cert --dir ./lab-pki --host 127.0.0.1
+adbgath --device SERIAL security
+adbgath --device SERIAL mastg
 ```
 
-Enroll an outbound agent:
+Web:
+
+```text
+Security Audit
+  -> Run audit
+  -> Build MASTG bundle
+```
+
+Both Web buttons queue workspace-scoped background jobs. ADB-Gath 3.7 includes a regression test for both job contracts.
+
+## Projects and evidence
+
+Typical commands:
 
 ```bash
-adbgath lab agent-enroll lab-windows-01 --pki-dir ./lab-pki --controller https://127.0.0.1:9443
+adbgath project create "Authorized Android Assessment" --scope "owned test device"
+adbgath project list
+adbgath evidence --package com.example.app
+adbgath snapshot create before --package com.example.app
+adbgath security
+adbgath report PROJECT_ID --format html
 ```
 
-Start the controller using the generated certificate paths:
-
-```bash
-adbgath lab controller --host 127.0.0.1 --port 9443 --cert ./lab-pki/controller-adbgath-controller-cert.pem --key ./lab-pki/controller-adbgath-controller-key.pem --ca ./lab-pki/ca-cert.pem
-```
-
-On the enrolled worker, run the generated agent configuration:
-
-```bash
-adbgath lab agent-run --config ./lab-pki/agent-lab-windows-01.json
-```
-
-Submit only catalogued operations:
-
-```bash
-adbgath lab job-submit --agent lab-windows-01 --action devices --role viewer
-adbgath lab jobs
-adbgath audit verify
-```
-
-Distributed agents do not expose a shell and reject controller, updater, Web-server, and other non-agent operations. Destructive operations require an operator/administrator role plus explicit `--approved`.
-
-The local Web UI adds `/lab` for agents, jobs, policy checks, artifact integrity, and audit history.
-
-See [`docs/DISTRIBUTED_LAB.md`](docs/DISTRIBUTED_LAB.md).
-
-## Content-addressed evidence
+Content-addressed evidence:
 
 ```bash
 adbgath artifact-store status
 adbgath artifact-store import --path evidence.log --project-id PROJECT
 adbgath artifact-store verify
-adbgath artifact-store gc            # dry-run
-adbgath artifact-store gc --apply    # remove only unreferenced objects
+adbgath artifact-store gc
+adbgath artifact-store gc --apply
 ```
 
-Identical SHA-256 content is stored once and referenced by logical project/session records.
+## Distributed Lab
 
-## Supply chain
+Distributed Lab is integrated into the main Web navigation and is optional. The controller uses mTLS and enrolled outbound-only agents.
 
 ```bash
-adbgath sbom --format cyclonedx --output cyclonedx.json
-adbgath sbom --format spdx --output spdx.json
-adbgath plugin keygen --private-key publisher.key --public-key publisher.pub
-adbgath plugin sign --manifest plugin.json --plugin-file plugin.py --private-key publisher.key --output plugin.sig.json
-adbgath plugin verify --bundle plugin.sig.json --plugin-file plugin.py --public-key publisher.pub
+adbgath lab pki-init --dir ./lab-pki
+adbgath lab controller-cert --dir ./lab-pki --host 127.0.0.1
+adbgath lab agent-enroll lab-windows-01 --pki-dir ./lab-pki --controller https://127.0.0.1:9443
 ```
 
-## Web UI
+Start controller:
 
 ```bash
-adbgath web
+adbgath lab controller \
+  --host 127.0.0.1 --port 9443 \
+  --cert ./lab-pki/controller-adbgath-controller-cert.pem \
+  --key ./lab-pki/controller-adbgath-controller-key.pem \
+  --ca ./lab-pki/ca-cert.pem
 ```
 
-Default address:
+See [`docs/DISTRIBUTED_LAB.md`](docs/DISTRIBUTED_LAB.md).
 
-```text
-http://127.0.0.1:8765
-```
+## Secure update
 
-The Web UI includes device/profile selection, dynamic operation forms, package/APK workspace, live logcat, Wireless Debugging, projects, jobs, findings, snapshots, evidence, reports, and artifact downloads.
-
-Remote mode is opt-in and requires TLS plus a long operator token:
+Normal update:
 
 ```bash
-adbgath web --host 0.0.0.0 \
-  --remote-token "LONG_RANDOM_OPERATOR_TOKEN" \
-  --tls-cert ./server.crt \
-  --tls-key ./server.key
+adbgath update
 ```
 
-Plaintext non-loopback mode is rejected.
-
-## Assessment workflows
+Force reinstall the current latest revision, useful after a hotfix or damaged installation:
 
 ```bash
-adbgath --device SERIAL --user current list packages --include-paths
-adbgath --device SERIAL assess com.example.app
-adbgath --device SERIAL evidence --package com.example.app --output ./evidence
-adbgath static ./app.apk --output ./reports/app-static.json
-adbgath project list
-adbgath findings --project-id PROJECT_ID
-adbgath report PROJECT_ID --format html
-adbgath report PROJECT_ID --format sarif
+adbgath update force
 ```
 
-Incremental inventory:
+Advanced/manual modes remain available:
 
 ```bash
-adbgath --device SERIAL inventory capture --name before
-adbgath inventory list
-adbgath inventory diff BEFORE_ID AFTER_ID
-adbgath --device SERIAL inventory watch --interval 10
-adbgath schema
+adbgath update check
+adbgath update plan
+adbgath update install --archive FILE.zip --checksum SHA256
+adbgath update rollback
 ```
+
+Update preserves managed configuration and workspace/server data.
+
+## Uninstall
+
+Windows, preserve workspace/user data:
+
+```bat
+installers\windows\uninstall.cmd -KeepWorkspace
+```
+
+Windows full data removal:
+
+```bat
+installers\windows\uninstall.cmd
+```
+
+Linux preserve workspace/user data:
+
+```bash
+./installers/linux/uninstall.sh --keep-workspace
+```
+
+If `ADBGATH_SERVER_HOME` points to a custom location, review that directory explicitly before deleting it.
+
+## Security properties
+
+ADB-Gath intentionally uses:
+
+- allowlisted operations rather than arbitrary browser shell execution;
+- argument-array subprocesses with `shell=False`;
+- semantic ADB failure detection;
+- bounded process output and cancellation;
+- authenticated Web sessions and per-user workspace ownership checks;
+- CSRF protection on unsafe Web API requests;
+- WebSocket session checks;
+- TLS-only non-loopback Web mode;
+- scrypt password hashing;
+- session-token hashes at rest;
+- mTLS for distributed agents;
+- RBAC and explicit approval for destructive distributed operations;
+- tamper-evident audit history;
+- SHA-256 evidence and content-addressed artifacts;
+- Ed25519 plugin signatures;
+- updater archive/checksum validation and rollback.
 
 ## Development and validation
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate                # Linux
-# .venv\Scripts\activate           # Windows
-python -m pip install -e ".[dev]"
-ruff check .
+python -m pytest -q
 python -m compileall -q src
-pytest
-node --check src/adbgath/web/static/app.js
-node --check src/adbgath/web/static/wireless340.js
-python -m build
 ```
+
+JavaScript syntax can be checked with Node when installed:
+
+```bash
+node --check src/adbgath/web/static/app.js
+node --check src/adbgath/web/static/app370.js
+```
+
+The test suite includes FakeADB device regressions and focused tests for authentication, CSRF, workspace ownership, jobs, Wireless Debugging, CAS, RBAC, audit, mTLS lab workflows and update behavior.
 
 ## Documentation
 
-- [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
-- [`docs/WIRELESS.md`](docs/WIRELESS.md)
-- [`docs/WEB_UI.md`](docs/WEB_UI.md)
-- [`docs/SECURITY.md`](docs/SECURITY.md)
-- [`docs/WINDOWS.md`](docs/WINDOWS.md)
-- [`docs/IMPLEMENTATION_REPORT.md`](docs/IMPLEMENTATION_REPORT.md)
-- [`docs/ROADMAP_3_5_3_6.md`](docs/ROADMAP_3_5_3_6.md)
+- [`docs/WEB_AUTH_3_7.md`](docs/WEB_AUTH_3_7.md) — Web users, sessions, workspaces and migration.
+- [`docs/WEB_UI.md`](docs/WEB_UI.md) — Web workspace behavior.
+- [`docs/WIRELESS.md`](docs/WIRELESS.md) — Wireless Debugging.
+- [`docs/DISTRIBUTED_LAB.md`](docs/DISTRIBUTED_LAB.md) — optional distributed lab.
+- [`docs/SECURITY_3_6.md`](docs/SECURITY_3_6.md) — 3.6 security foundations retained by 3.7.
+- [`docs/SUPPLY_CHAIN.md`](docs/SUPPLY_CHAIN.md) — SBOM/provenance.
+- [`docs/WINDOWS.md`](docs/WINDOWS.md) — Windows installation/repair.
 
 ## License
 
