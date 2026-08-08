@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import secrets
 from pathlib import Path
@@ -43,8 +44,14 @@ def _load_or_create(root: Path) -> bytes:
     return data
 
 
+def _legacy_marker(secret: bytes) -> str:
+    """Return a stable non-secret compatibility marker safe to send as a cookie."""
+    digest = hashlib.sha256(b"ADB-Gath/3.7/legacy-session-marker\x00" + secret).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
 def patch_webapp(module: Any) -> None:
-    """Persist the legacy compatibility/CSRF signing marker across Web restarts."""
+    """Persist server-only CSRF key material while exposing only a derived marker."""
     if getattr(module, "_adbgath_370_server_secret_patched", False):
         return
     original_create_app = module.create_app
@@ -58,8 +65,9 @@ def patch_webapp(module: Any) -> None:
         )
         auth_store = getattr(app.state, "auth_store", None)
         if auth_store is not None:
-            marker = base64.urlsafe_b64encode(_load_or_create(Path(auth_store.root))).decode("ascii").rstrip("=")
-            app.state.session_token = marker
+            secret = _load_or_create(Path(auth_store.root))
+            app.state.csrf_secret_370 = secret
+            app.state.session_token = _legacy_marker(secret)
         return app
 
     module.create_app = create_app
