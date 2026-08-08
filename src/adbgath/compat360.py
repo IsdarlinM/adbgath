@@ -60,3 +60,6 @@ def apply() -> None:
 
     from .integratedweb360 import patch_webapp as patch_integrated_web_sections
     patch_integrated_web_sections(webapp_module)
+
+    from .websocketcleanup360 import patch_webapp as patch_websocket_cleanup
+    patch_websocket_cleanup(webapp_module)
