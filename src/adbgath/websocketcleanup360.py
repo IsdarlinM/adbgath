@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from functools import wraps
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 from fastapi import WebSocketDisconnect
 
