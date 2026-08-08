@@ -51,6 +51,9 @@ def apply() -> None:
     from .remoteroot370 import patch_webapp as patch_remote_root
     patch_remote_root(webapp_module)
 
+    from .remotesetup370 import patch_webapp as patch_remote_setup
+    patch_remote_setup(webapp_module)
+
     from .websocketexpiry370 import patch_webapp as patch_websocket_expiry
     patch_websocket_expiry(webapp_module)
 
