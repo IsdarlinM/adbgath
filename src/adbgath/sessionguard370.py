@@ -24,6 +24,7 @@ def patch_auth_sessions(module: Any) -> None:
             ).fetchone()
             if not session or bool(session["disabled"]) or int(session["expires_at"]) <= now:
                 conn.execute("DELETE FROM auth_sessions WHERE token_hash=?", (digest,))
+                conn.commit()
                 raise KeyError("session")
             workspace = conn.execute(
                 "SELECT id FROM auth_workspaces WHERE id=? AND user_id=?",
