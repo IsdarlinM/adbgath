@@ -19,6 +19,9 @@ def apply() -> None:
     from .serversecret370 import patch_webapp as patch_server_secret
     patch_server_secret(webapp_module)
 
+    from .webauthz370 import patch_webapp as patch_web_authorization
+    patch_web_authorization(webapp_module)
+
     from . import cli as cli_module
     from .cli370 import patch_cli as patch_auth_cli
     patch_auth_cli(cli_module)
