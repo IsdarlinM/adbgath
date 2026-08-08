@@ -106,6 +106,8 @@ def patch_webapp(module: Any) -> None:
                     result = _original(request)
                     if inspect.isawaitable(result):
                         result = await result
+                    if not auth.has_users():
+                        result = _with_startup_field(result)
                     return result
 
                 route.endpoint = guarded_setup
