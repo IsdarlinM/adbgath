@@ -11,15 +11,28 @@
 ADB-Gath
 Defensive ADB Toolkit
 ADB-Gathering
-Developer: IsdarlinM | Version: 3.7.0
+Developer: IsdarlinM | Version: 3.7.1
 Threat intel • Device forensics • Defensive ADB workflow
 ```
 
-**ADB-Gath 3.7.0** is a cross-platform Android assessment and evidence toolkit for authorized mobile-security work. It provides a native Windows/Linux CLI, authenticated multi-workspace Web UI, Android Wireless Debugging, persistent projects, reproducible evidence, static/runtime analysis, secure updates, and an optional mTLS Distributed Lab.
+**ADB-Gath 3.7.1** is a cross-platform Android assessment and evidence toolkit for authorized mobile-security work. It provides a native Windows/Linux CLI, authenticated multi-workspace Web UI, Android Wireless Debugging, persistent projects, reproducible evidence, static/runtime analysis, secure updates, and an optional mTLS Distributed Lab.
 
 > Use ADB-Gath only on devices, applications, accounts, and environments you own or are explicitly authorized to test.
 
-## What's new in 3.7.0
+## What's new in 3.7.1
+
+- Replaces the native browser preset-name prompt with an ADB-Gath themed modal dialog.
+- Stores Command Center presets server-side in the authenticated **user + workspace** scope rather than using browser local storage as the active store.
+- Migrates legacy browser presets into the active workspace and restores the browser copy if migration fails.
+- Excludes every catalog field typed as `secret` from preset persistence and renders secret Command Center inputs as password fields.
+- Adds themed confirmations for deleting presets, cancelling jobs, and clearing the device log buffer.
+- Adds inline required/range validation with focus on the first invalid Command Center field.
+- Adds busy/disabled states to execution, audit, MASTG, and package-loading actions to reduce duplicate submissions.
+- Reworks watched-job polling to support multiple jobs, stop after terminal states, and reduce polling while the tab is hidden.
+- Adds **COPY** controls to structured output consoles.
+- Adds ARIA live-region behavior and keyboard-friendly native `<dialog>` interactions.
+
+## 3.7.0 foundation retained
 
 - First-party Web authentication with `user` and `administrator` roles.
 - Isolated per-user Web workspace namespaces.
@@ -98,7 +111,7 @@ The server database is separate from each assessment workspace. See [`docs/WEB_A
 
 ## Workspace selector
 
-The Web top bar now separates three concepts:
+The Web top bar separates three concepts:
 
 ```text
 TARGET DEVICE   -> selected ADB transport/device
@@ -108,9 +121,27 @@ WORKSPACE       -> ADB-Gath assessment workspace for the logged-in Web user
 
 Use **WORKSPACE** to switch between your workspaces. Use the adjacent `+` button to create and select a new one.
 
-Projects, jobs, snapshots, findings, reports, evidence and the workspace SQLite database resolve against the authenticated user's active workspace. Workspace IDs from the browser are checked against their owner before use.
+Projects, jobs, snapshots, findings, reports, evidence, presets and the workspace-specific execution context resolve against the authenticated user's active workspace. Workspace IDs from the browser are checked against their owner before use.
 
 Workspace isolation protects ADB-Gath data. It does not create separate ACLs for physical Android transports visible to the shared ADB server.
+
+## Command Center presets
+
+In **Operations → Command center**:
+
+1. Select an allowlisted operation and fill its fields.
+2. Select **Save**.
+3. Use the themed ADB-Gath dialog to name the preset.
+4. Load or delete the preset later from the same authenticated workspace.
+
+Preset rules in 3.7.1:
+
+- presets are stored in the server identity registry under the authenticated user/workspace scope;
+- another workspace receives a separate preset list;
+- another user cannot list or delete the preset through the API;
+- fields declared as `secret` are removed client-side before submission and again server-side before storage;
+- a preset with the same name in the same workspace is replaced instead of duplicated;
+- legacy browser presets are migrated on first use, with rollback to the browser copy if migration cannot complete.
 
 ## Web users
 
@@ -149,7 +180,7 @@ Security Audit
   -> Build MASTG bundle
 ```
 
-Both Web actions are long-running, workspace-scoped jobs in 3.7.0. Regression tests cover both request contracts and job completion.
+Both Web actions are long-running, workspace-scoped jobs. The Web UI prevents accidental duplicate clicks and tracks multiple watched jobs until they reach a terminal state.
 
 ## Wireless Debugging
 
@@ -239,6 +270,7 @@ ADB-Gath uses:
 - semantic ADB failure detection;
 - bounded asynchronous process output/cancellation;
 - per-user Web authentication and workspace ownership checks;
+- server-side per-workspace presets with secret-field stripping;
 - scrypt password hashing;
 - hashed session tokens at rest;
 - CSRF protection and same-origin authentication forms;
@@ -259,9 +291,11 @@ python -m pytest -q
 python -m compileall -q src
 node --check src/adbgath/web/static/app.js
 node --check src/adbgath/web/static/app370.js
+node --check src/adbgath/web/static/ux371.js
+node --check src/adbgath/web/static/presets371.js
 ```
 
-The suite includes FakeADB regressions plus focused authentication, CSRF, workspace ownership, user authorization, Security/MASTG jobs, Wireless Debugging, CAS, audit, RBAC, mTLS lab and updater tests.
+The suite includes FakeADB regressions plus focused authentication, CSRF, workspace ownership, user authorization, Security/MASTG jobs, server-side preset isolation, secret stripping, Wireless Debugging, CAS, audit, RBAC, mTLS lab and updater tests.
 
 ## Documentation
 
