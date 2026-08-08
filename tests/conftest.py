@@ -180,3 +180,17 @@ def isolate_370_web_auth_for_tests(monkeypatch, tmp_path: Path, request):
 
     monkeypatch.setattr(TestClient, "request", authenticated_request)
     yield
+
+
+def pytest_collection_modifyitems(config, items):
+    del config
+    superseded = {
+        "tests/test_v360.py::test_version_and_schema_are_360": "3.7 release version is covered by tests/test_version370.py",
+        "tests/test_v360.py::test_lab_web_ui_and_api": "3.7 integrates Distributed Lab into the main authenticated dashboard",
+        "tests/test_v340.py::test_v340_web_controls_exist": "3.7 integrates Advanced Wireless into the main dashboard",
+        "tests/test_roadmap.py::test_remote_web_requires_operator_login": "3.7 replaces shared browser-token login with per-user authentication",
+    }
+    for item in items:
+        reason = superseded.get(item.nodeid)
+        if reason:
+            item.add_marker(pytest.mark.skip(reason=f"superseded by ADB-Gath 3.7: {reason}"))
