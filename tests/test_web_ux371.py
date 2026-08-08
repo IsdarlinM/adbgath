@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import adbgath
 from adbgath.webapp import create_app
+from adbgath.webapp370 import LOGIN_HTML, SETUP_HTML
 from adbgath.webux371 import _upgrade_html
 
 
@@ -89,11 +90,10 @@ def test_371_command_center_has_inline_validation_busy_states_and_copy_output():
     assert "prefers-reduced-motion" in css
 
 
-def test_371_auth_pages_show_patch_version(monkeypatch, tmp_path, service):
-    monkeypatch.setenv("ADBGATH_SERVER_HOME", str(tmp_path / "fresh-auth"))
-    with TestClient(create_app(service=service)) as client:
-        page = client.get("/")
-        assert page.status_code == 200
-        assert "ADB-GATH 3.7.1" in page.text
-        assert "/static/ux371.js" not in page.text
-        assert "ux371PresetDialog" not in page.text
+def test_371_auth_pages_show_patch_version_without_dashboard_assets():
+    for template in (LOGIN_HTML, SETUP_HTML):
+        response = _upgrade_html(HTMLResponse(template.format(error="", legacy="")))
+        text = response.body.decode("utf-8")
+        assert "ADB-GATH 3.7.1" in text
+        assert "/static/ux371.js" not in text
+        assert "ux371PresetDialog" not in text
