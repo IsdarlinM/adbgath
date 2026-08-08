@@ -19,12 +19,13 @@ After setup, every Web request requires an authenticated session.
 ## Authentication model
 
 - Passwords are never stored in plaintext.
-- Password verification uses `hashlib.scrypt` with a random 16-byte salt (`N=2^14`, `r=8`, `p=1`, 32-byte output).
+- Password verification uses `hashlib.scrypt` with a random 16-byte salt (`N=2^15`, `r=8`, `p=3`, 32-byte output), one of the equivalent scrypt profiles listed by OWASP.
 - Browser session tokens are generated with `secrets.token_urlsafe(48)`.
 - Only SHA-256 hashes of session tokens are stored in the server database.
 - Sessions expire after 12 hours and are revoked on password reset or user disable.
 - Cookies are `HttpOnly`, `SameSite=Strict`, and `Secure` when TLS is enabled.
 - Unsafe same-origin API requests require an `X-ADBGATH-CSRF` token bound to the authenticated session.
+- The CSRF HMAC key remains server-only; browser compatibility cookies contain only a one-way derived marker.
 - WebSocket endpoints resolve the authenticated user before binding an ADB-Gath workspace.
 - Non-loopback Web mode still requires the existing TLS and remote-startup safeguards.
 
@@ -59,6 +60,8 @@ Workspace IDs are random internal identifiers. Browser-supplied workspace IDs ar
 
 Background jobs capture the resolved `AdbgathService` for the active workspace before entering the worker thread. A later workspace switch or concurrent request from another user cannot retarget an already queued job.
 
+Workspace isolation protects ADB-Gath data boundaries. It does not create per-user ACLs for the physical Android transports visible to the shared ADB server.
+
 ## User administration
 
 Administrators receive a **Users** view in the main dashboard. It can:
@@ -67,7 +70,7 @@ Administrators receive a **Users** view in the main dashboard. It can:
 - create a user or another administrator;
 - enable/disable users.
 
-Password resets are intentionally available from the local CLI so a new password does not pass through browser prompts or browser storage:
+Password resets are available from the local CLI so administrators can avoid putting a new password in browser history or browser storage:
 
 ```bash
 adbgath web-user list
@@ -78,16 +81,16 @@ adbgath web-user disable analyst
 adbgath web-user enable analyst
 ```
 
-For automation, read the password from an environment variable rather than a command-line argument:
+For automation, read the password from a short-lived environment variable rather than a command-line argument:
 
 ```bash
-ADBGATH_NEW_PASSWORD='replace-this-secret' adbgath web-user add analyst --password-env ADBGATH_NEW_PASSWORD
+ADBGATH_NEW_PASSWORD='PASSWORD_VALUE' adbgath web-user add analyst --password-env ADBGATH_NEW_PASSWORD
 ```
 
 PowerShell example:
 
 ```powershell
-$env:ADBGATH_NEW_PASSWORD = 'replace-this-secret'
+$env:ADBGATH_NEW_PASSWORD = 'PASSWORD_VALUE'
 adbgath web-user reset-password analyst --password-env ADBGATH_NEW_PASSWORD
 Remove-Item Env:ADBGATH_NEW_PASSWORD
 ```
