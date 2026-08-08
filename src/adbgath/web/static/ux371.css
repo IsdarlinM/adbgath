@@ -1,0 +1,91 @@
+.ux371-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(82vh, 720px);
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 96%, #020806);
+  color: var(--text);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .58), 0 0 0 1px rgba(105, 248, 187, .04) inset;
+  overflow: hidden;
+}
+
+.ux371-dialog::backdrop {
+  background: rgba(0, 5, 4, .76);
+  backdrop-filter: blur(7px);
+}
+
+.ux371-dialog form { padding: 22px; }
+.ux371-dialog .panel-head { margin-bottom: 18px; }
+.ux371-dialog h3 { margin: 4px 0 0; font-size: 1.15rem; }
+.ux371-dialog p { color: var(--muted); line-height: 1.55; }
+.ux371-dialog label { display: grid; gap: 7px; margin-top: 14px; }
+.ux371-dialog label > span { color: var(--muted); font-size: .76rem; font-weight: 700; letter-spacing: .08em; }
+.ux371-dialog input { width: 100%; }
+.ux371-dialog .execute-row { margin-top: 22px; justify-content: flex-end; }
+.ux371-dialog .ux371-danger { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); }
+
+.ux371-scope-card,
+.ux371-dialog-note {
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .018);
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+.ux371-scope-card strong { color: var(--accent); }
+.ux371-dialog-note.warning { border-color: color-mix(in srgb, var(--warning) 38%, var(--line)); }
+
+.ux371-preset-scope {
+  display: block;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+.ux371-preset-scope strong { color: var(--accent); font-weight: 700; }
+
+.ux371-field-error {
+  display: block;
+  margin-top: 5px;
+  color: var(--danger);
+  font-size: .72rem;
+}
+
+.ux371-invalid {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--line)) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 12%, transparent) !important;
+}
+
+button.ux371-busy,
+button[aria-busy="true"] {
+  cursor: progress;
+  opacity: .72;
+}
+
+.ux371-copy-button { margin-left: 6px; }
+
+.ux371-dialog [data-confirm-tone="danger"] {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--line));
+}
+
+#toast[role="status"],
+#toast[role="alert"] { outline: none; }
+
+@media (max-width: 680px) {
+  .ux371-dialog { width: calc(100vw - 18px); border-radius: 14px; }
+  .ux371-dialog form { padding: 17px; }
+  .ux371-dialog .execute-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .ux371-dialog .execute-row button { width: 100%; }
+  .preset-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .preset-row #deletePreset { grid-column: 1 / -1; justify-self: end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ux371-dialog::backdrop { backdrop-filter: none; }
+}
