@@ -46,14 +46,15 @@ def test_unified_theme_uses_dashboard_green_tokens_and_wraps_environment_values(
     assert 'overflow-wrap: anywhere' in css
 
 
-def test_advanced_wireless_keeps_functional_assets_with_unified_theme(tmp_path: Path):
+def test_advanced_wireless_is_integrated_into_dashboard_with_unified_theme(tmp_path: Path):
     app = create_app(workspace=tmp_path)
     with TestClient(app) as client:
-        html = client.get('/wireless').text
+        html = client.get('/?view=wireless-main&advanced=1').text
 
     assert '/static/styles.css' in html
-    assert '/static/wireless.css' in html
-    assert '/static/wireless340.css' in html
+    assert '/static/dashboardpairing360.css' in html
+    assert '/static/integratedweb360.css' in html
     assert '/static/theme360.css' in html
-    assert 'PAIR BY QR' in html
-    assert 'PAIR BY CODE' in html
+    assert 'PAIR WITHOUT CODE' in html
+    assert 'PAIR WITH CODE' in html
+    assert 'id="advancedWirelessPanel"' in html
