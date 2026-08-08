@@ -54,3 +54,6 @@ def apply() -> None:
 
     from .dashboardpairing360 import patch_webapp as patch_dashboard_pairing
     patch_dashboard_pairing(webapp_module)
+
+    from .webtheme360 import patch_webapp as patch_unified_web_theme
+    patch_unified_web_theme(webapp_module)
