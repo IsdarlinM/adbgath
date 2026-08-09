@@ -11,15 +11,24 @@
 ADB-Gath
 Defensive ADB Toolkit
 ADB-Gathering
-Developer: IsdarlinM | Version: 3.7.1
+Developer: IsdarlinM | Version: 3.7.2
 Threat intel • Device forensics • Defensive ADB workflow
 ```
 
-**ADB-Gath 3.7.1** is a cross-platform Android assessment and evidence toolkit for authorized mobile-security work. It provides a native Windows/Linux CLI, authenticated multi-workspace Web UI, Android Wireless Debugging, persistent projects, reproducible evidence, static/runtime analysis, secure updates, and an optional mTLS Distributed Lab.
+**ADB-Gath 3.7.2** is a cross-platform Android assessment and evidence toolkit for authorized mobile-security work. It provides a native Windows/Linux CLI, authenticated multi-workspace Web UI, Android Wireless Debugging, persistent projects, reproducible evidence, static/runtime analysis, secure updates, and an optional mTLS Distributed Lab.
 
 > Use ADB-Gath only on devices, applications, accounts, and environments you own or are explicitly authorized to test.
 
-## What's new in 3.7.1
+## What's new in 3.7.2
+
+- Fixes the 3.7.1 startup/update regression where the preset compatibility layer referenced a nonexistent `AuthStore._ensure_schema` method.
+- Creates the per-user/per-workspace preset schema idempotently from the real `AuthStore` initialization path.
+- Adds a fresh-interpreter updater candidate preflight before package backup/swap; it imports the staged package, builds the complete CLI parser and constructs the Web app in an isolated temporary server/workspace root.
+- Rejects a broken update candidate before the installed package is replaced and reports that the installed package was not modified.
+- Renders the installed patch version dynamically in the Web UX layer instead of hard-coding 3.7.1.
+- Adds recursive CLI help/parser coverage, update-mode coverage, candidate-preflight regression tests, API route-uniqueness checks, first-party static-asset checks and Security Audit/MASTG background-job regressions.
+
+## 3.7.1 Web UX retained
 
 - Replaces the native browser preset-name prompt with an ADB-Gath themed modal dialog.
 - Stores Command Center presets server-side in the authenticated **user + workspace** scope rather than using browser local storage as the active store.
@@ -134,7 +143,7 @@ In **Operations → Command center**:
 3. Use the themed ADB-Gath dialog to name the preset.
 4. Load or delete the preset later from the same authenticated workspace.
 
-Preset rules in 3.7.1:
+Preset rules:
 
 - presets are stored in the server identity registry under the authenticated user/workspace scope;
 - another workspace receives a separate preset list;
@@ -241,6 +250,8 @@ adbgath update check
 adbgath update rollback
 ```
 
+Starting with 3.7.2, a managed update candidate must pass a fresh-interpreter import, CLI-parser construction and Web-app construction before the installed package is backed up or replaced. The existing post-swap smoke test and rollback remain in place as a second safety boundary.
+
 `update force` is useful for reinstalling a hotfix or repairing the managed package. User/workspace data is outside the package replacement path.
 
 ## Uninstall
@@ -282,7 +293,7 @@ ADB-Gath uses:
 - tamper-evident audit history;
 - SHA-256/content-addressed evidence;
 - Ed25519 plugin signatures;
-- validated updater staging and rollback.
+- staged updater validation, preflight, post-install smoke testing and rollback.
 
 ## Development
 
