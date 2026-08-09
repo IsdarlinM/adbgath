@@ -47,3 +47,9 @@ def apply() -> None:
     from .webfinal372 import patch_webapp as patch_final_web
 
     patch_final_web(webapp_module)
+
+    from .webtls372 import patch_cli as patch_remote_tls_cli
+    from .webtls372 import patch_webapp as patch_remote_tls_webapp
+
+    patch_remote_tls_webapp(webapp_module)
+    patch_remote_tls_cli(cli_module, webapp_module)
