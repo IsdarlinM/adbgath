@@ -3,6 +3,8 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+from . import __version__
+
 
 UX_DIALOGS = r'''
 <dialog id="ux371PresetDialog" class="ux371-dialog" aria-labelledby="ux371PresetTitle">
@@ -50,7 +52,9 @@ def _upgrade_html(response: Any) -> Any:
     except Exception:
         return response
 
-    html = html.replace("3.7.0", "3.7.1")
+    # Earlier compatibility layers still render their own historical patch
+    # strings.  The final Web layer always exposes the installed package version.
+    html = html.replace("3.7.0", __version__).replace("3.7.1", __version__)
     if 'id="presetSelect"' in html:
         if "/static/ux371.css" not in html:
             html = html.replace("</head>", '  <link rel="stylesheet" href="/static/ux371.css">\n</head>', 1)
