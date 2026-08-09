@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from adbgath import cli, webapp
 from adbgath.errors import AdbgathError
-from adbgath.webtls372 import generate_self_signed_tls, validate_tls_pair
+from adbgath.webtls372 import ensure_self_signed_tls, generate_self_signed_tls, validate_tls_pair
 
 
 def test_web_cli_exposes_auto_tls_and_explicit_insecure_mode():
@@ -31,7 +31,7 @@ def test_web_cli_exposes_auto_tls_and_explicit_insecure_mode():
     ).choices["web"].format_help()
     assert "--insecure-http" in help_text
     assert "--tls-san" in help_text
-    assert "generates a self-signed certificate" in help_text
+    assert "generates/reuses a self-signed certificate" in help_text
 
 
 def test_generated_tls_is_ecdsa_p256_sha256_with_requested_sans(tmp_path: Path):
@@ -62,6 +62,33 @@ def test_generated_tls_is_ecdsa_p256_sha256_with_requested_sans(tmp_path: Path):
     assert checked_cert == cert_path.resolve()
     assert checked_key == key_path.resolve()
     assert checked.serial_number == cert.serial_number
+
+
+def test_managed_tls_identity_is_reused_until_rotation_is_needed(tmp_path: Path):
+    first_cert, first_key, first, generated = ensure_self_signed_tls(
+        host="0.0.0.0", directory=tmp_path, extra_sans=["192.168.1.20"]
+    )
+    second_cert, second_key, second, generated_again = ensure_self_signed_tls(
+        host="0.0.0.0", directory=tmp_path, extra_sans=["192.168.1.20"]
+    )
+    assert generated is True
+    assert generated_again is False
+    assert first_cert == second_cert
+    assert first_key == second_key
+    assert first.serial_number == second.serial_number
+
+
+def test_managed_tls_rotates_when_new_san_is_required(tmp_path: Path):
+    _, _, first, _ = ensure_self_signed_tls(
+        host="0.0.0.0", directory=tmp_path, extra_sans=["192.168.1.20"]
+    )
+    _, _, second, generated = ensure_self_signed_tls(
+        host="0.0.0.0", directory=tmp_path, extra_sans=["192.168.1.21"]
+    )
+    assert generated is True
+    assert first.serial_number != second.serial_number
+    names = second.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    assert "192.168.1.21" in {str(value) for value in names.get_values_for_type(x509.IPAddress)}
 
 
 def test_invalid_requested_tls_san_is_rejected(tmp_path: Path):
