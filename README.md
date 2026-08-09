@@ -27,6 +27,7 @@ Threat intel • Device forensics • Defensive ADB workflow
 - Rejects a broken update candidate before the installed package is replaced and reports that the installed package was not modified.
 - Renders the installed patch version dynamically in the Web UX layer instead of hard-coding 3.7.1.
 - Adds recursive CLI help/parser coverage, update-mode coverage, candidate-preflight regression tests, API route-uniqueness checks, first-party static-asset checks and Security Audit/MASTG background-job regressions.
+- Makes remote Web TLS self-managing: when no certificate/key are supplied, ADBGath generates and reuses a self-signed ECDSA P-256 certificate; authenticated plaintext HTTP remains available only through the explicit `--insecure-http` opt-in.
 
 ## 3.7.1 Web UX retained
 
@@ -117,6 +118,36 @@ Linux:   ${XDG_DATA_HOME:-~/.local/share}/adbgath-server
 Override it with `ADBGATH_SERVER_HOME` when required.
 
 The server database is separate from each assessment workspace. See [`docs/WEB_AUTH_3_7.md`](docs/WEB_AUTH_3_7.md) for the authentication, CSRF, session, migration and workspace-isolation model.
+
+### Remote Web transport
+
+Remote mode still requires a startup token of at least 24 characters, but certificate files are no longer mandatory.
+
+Secure default — ADBGath generates/reuses a self-signed ECDSA P-256 certificate and private key:
+
+```bash
+adbgath web --host 0.0.0.0 --remote-token 'LONG_STARTUP_TOKEN'
+```
+
+Add the IP/DNS name clients will use when necessary:
+
+```bash
+adbgath web --host 0.0.0.0 --remote-token 'LONG_STARTUP_TOKEN' --tls-san 192.168.1.20
+```
+
+Use your own certificate/key:
+
+```bash
+adbgath web --host 0.0.0.0 --remote-token 'LONG_STARTUP_TOKEN' --tls-cert ./server-cert.pem --tls-key ./server-key.pem
+```
+
+Explicit plaintext mode:
+
+```bash
+adbgath web --host 0.0.0.0 --remote-token 'LONG_STARTUP_TOKEN' --insecure-http
+```
+
+`--insecure-http` is intentionally noisy because login credentials, cookies and assessment data are not encrypted in transit. Prefer automatic TLS or a trusted reverse proxy. A self-signed certificate is encrypted transport but still requires explicit client trust to remove browser certificate warnings.
 
 ## Workspace selector
 
@@ -286,7 +317,7 @@ ADB-Gath uses:
 - hashed session tokens at rest;
 - CSRF protection and same-origin authentication forms;
 - authenticated WebSockets with session expiration;
-- TLS-only non-loopback Web mode;
+- authenticated non-loopback Web mode with automatic TLS by default and explicit `--insecure-http` opt-in;
 - role-gated Web administration;
 - mTLS distributed agents;
 - RBAC and explicit approval for destructive distributed operations;
@@ -304,9 +335,10 @@ node --check src/adbgath/web/static/app.js
 node --check src/adbgath/web/static/app370.js
 node --check src/adbgath/web/static/ux371.js
 node --check src/adbgath/web/static/presets371.js
+node --check src/adbgath/web/static/ux372.js
 ```
 
-The suite includes FakeADB regressions plus focused authentication, CSRF, workspace ownership, user authorization, Security/MASTG jobs, server-side preset isolation, secret stripping, Wireless Debugging, CAS, audit, RBAC, mTLS lab and updater tests.
+The suite includes FakeADB regressions plus focused authentication, CSRF, workspace ownership, user authorization, Security/MASTG jobs, server-side preset isolation, secret stripping, Wireless Debugging, CAS, audit, RBAC, mTLS lab, remote Web TLS/HTTP transport and updater tests.
 
 ## Documentation
 
