@@ -15,11 +15,11 @@ STATIC = Path(__file__).parents[1] / "src" / "adbgath" / "web" / "static"
 
 
 def test_371_version_and_dashboard_assets(service):
-    assert adbgath.__version__ == "3.7.1"
+    assert adbgath.__version__ == "3.7.2"
     with TestClient(create_app(service=service)) as client:
         page = client.get("/")
         assert page.status_code == 200
-        assert "3.7.1" in page.text
+        assert "3.7.2" in page.text
         assert page.text.count('/static/ux371.css') == 1
         assert page.text.count('/static/ux371.js') == 1
         assert page.text.count('/static/presets371.js') == 1
@@ -139,11 +139,11 @@ def test_371_command_center_has_inline_validation_busy_states_and_copy_output():
     assert "prefers-reduced-motion" in css
 
 
-def test_371_auth_pages_show_patch_version_without_dashboard_assets():
+def test_371_auth_pages_show_current_patch_version_without_dashboard_assets():
     for template in (LOGIN_HTML, SETUP_HTML):
         response = _upgrade_html(HTMLResponse(template.format(error="", legacy="")))
         text = response.body.decode("utf-8")
-        assert "ADB-GATH 3.7.1" in text
+        assert "ADB-GATH 3.7.2" in text
         assert "/static/ux371.js" not in text
         assert "/static/presets371.js" not in text
         assert "ux371PresetDialog" not in text
