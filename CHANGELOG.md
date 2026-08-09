@@ -2,6 +2,27 @@
 
 All notable changes to ADB-Gath are documented here.
 
+## [3.7.2] - 2026-08-09
+
+### Fixed
+
+- Fixed the 3.7.1 import/update regression where `presetstore371` referenced the nonexistent private method `AuthStore._ensure_schema`.
+- Preset schema creation now hooks the real `AuthStore` initialization path and remains idempotent for existing 3.7 user/workspace registries.
+- The Web UX layer now renders the installed patch version dynamically instead of hard-coding 3.7.1.
+
+### Update safety
+
+- Added a fresh-interpreter candidate preflight before managed package backup/swap.
+- The preflight imports the staged package from its staging root, constructs the complete CLI parser, and constructs the authenticated Web application using isolated temporary server/workspace directories.
+- Broken candidates are rejected before the installed package is replaced; the existing post-swap smoke test and rollback remain as a second safety boundary.
+
+### Validation
+
+- Added recursive help-formatting coverage across nested CLI command trees and explicit parsing checks for `update`, `update force`, `update check`, Wireless auto-connect and Web-user administration.
+- Added candidate-preflight success/failure regressions.
+- Added a real `AuthStore` preset-schema regression covering create/list/delete after the full compatibility chain is applied.
+- Added authenticated Web surface checks for duplicate API method/path registrations, first-party static assets, workspace/preset endpoints, and successful Security Audit/MASTG background jobs.
+
 ## [3.7.1] - 2026-08-08
 
 ### Added
