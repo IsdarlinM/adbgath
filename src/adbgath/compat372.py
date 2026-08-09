@@ -17,3 +17,8 @@ def apply() -> None:
     from .selfupdatesafety372 import patch_self_update_safety
 
     patch_self_update_safety(selfupdate_module)
+
+    from . import cli as cli_module
+    from .cliguard372 import patch_cli_input_errors
+
+    patch_cli_input_errors(cli_module)
