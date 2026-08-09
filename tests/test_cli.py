@@ -18,6 +18,16 @@ def test_legacy_install_translation():
     assert args.files == ["app.apk"]
 
 
+def test_legacy_removed_commands_translate_to_canonical_surface():
+    assert normalize_legacy_args(["connect", "127.0.0.1:5555"]) == [
+        "wireless", "connect", "127.0.0.1:5555"
+    ]
+    assert normalize_legacy_args(["disconnect", "127.0.0.1:5555"]) == [
+        "wireless", "disconnect", "127.0.0.1:5555"
+    ]
+    assert normalize_legacy_args(["collect"]) == ["evidence"]
+
+
 def test_modern_parser():
     args = build_parser().parse_args(["--device", "serial", "logs", "capture", "--duration", "10"])
     assert args.command == "logs"
@@ -54,8 +64,8 @@ def test_all_cli_command_help_parses():
     parser = build_parser()
     commands = [
         ["devices"],
-        ["connect", "127.0.0.1:5555"],
-        ["disconnect", "127.0.0.1:5555"],
+        ["wireless", "connect", "127.0.0.1:5555"],
+        ["wireless", "disconnect", "127.0.0.1:5555"],
         ["list", "users"],
         ["download"],
         ["install"],
@@ -85,7 +95,6 @@ def test_all_cli_command_help_parses():
         ["report", "prj_example"],
         ["update", "check"],
         ["security"],
-        ["collect"],
         ["mastg"],
         ["inventory"],
         ["doctor"],
