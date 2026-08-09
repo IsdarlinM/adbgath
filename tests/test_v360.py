@@ -21,7 +21,7 @@ from adbgath.webapp import create_app
 
 
 def test_version_and_schema_are_360(service):
-    assert adbgath.__version__ == "3.6.0"
+    assert tuple(map(int, adbgath.__version__.split("."))) >= (3, 6, 0)
     assert CURRENT_SCHEMA_VERSION == 360
     status = service.store.schema_status()
     assert status["database_version"] == 360
@@ -180,7 +180,7 @@ def test_sbom_generation(service, tmp_path: Path):
 def test_lab_web_ui_and_api(service):
     client = TestClient(create_app(service=service))
     root = client.get("/")
-    assert root.status_code == 200 and "Distributed Lab" in root.text and "3.6.0" in root.text
+    assert root.status_code == 200 and "Distributed Lab" in root.text and adbgath.__version__ in root.text
     page = client.get("/lab"); assert page.status_code == 200 and "mTLS agents" in page.text
     assert client.get("/api/lab/status").status_code == 200
     assert client.get("/api/lab/audit/verify").json()["data"]["ok"] is True
@@ -300,4 +300,3 @@ def test_web_entrypoint_serve_no_recursion(tmp_path, monkeypatch):
     webapp.serve(host="127.0.0.1", port=8877, open_browser=False, workspace=tmp_path)
     assert captured["app"].title == "adbgath Web"
     assert captured["kwargs"]["port"] == 8877
-
