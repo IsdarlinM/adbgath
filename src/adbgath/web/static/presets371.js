@@ -178,6 +178,20 @@
     }
   }
 
+  function loadSelectedPresetServer() {
+    const selected = selectedPreset();
+    if (!selected || !state.operations.has(selected.preset.action)) return toast("Select a valid preset.", true);
+    document.querySelector("#actionSelect").value = selected.preset.action;
+    renderActionForm(selected.preset.action);
+    for (const [name, value] of Object.entries(selected.preset.payload || {})) {
+      const input = document.querySelector(`#dynamicFields [name="${CSS.escape(name)}"]`);
+      if (!input) continue;
+      if (input.type === "checkbox") input.checked = Boolean(value);
+      else input.value = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+    }
+    toast("Preset loaded from the active workspace");
+  }
+
   async function commitServerPreset() {
     if (saveInFlight) return;
     const action = document.querySelector("#actionSelect")?.value || "";
@@ -240,7 +254,9 @@
   window.writePresets = () => { throw new Error("Presets are managed by the authenticated workspace."); };
   window.renderPresetSelect = renderPresetSelectServer;
   window.saveCurrentPreset = openSaveDialog;
+  window.loadSelectedPreset = loadSelectedPresetServer;
   window.deleteSelectedPreset = deleteSelectedPresetServer;
+  window.adbgathOpenPresetDialog = openSaveDialog;
 
   window.installOperationCatalog = function installOperationCatalogServer371(items) {
     const legacy = detachLegacyStorage();
@@ -281,7 +297,31 @@
     }
   }, true);
 
+  // Capture preset controls before the legacy app.js target listeners.  This
+  // makes the authenticated 3.7 flow deterministic even if browser/global
+  // binding semantics differ: native prompt/localStorage handlers never run.
   document.addEventListener("click", event => {
+    const save = event.target?.closest?.("#savePreset");
+    if (save) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openSaveDialog();
+      return;
+    }
+    const load = event.target?.closest?.("#loadPreset");
+    if (load) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      loadSelectedPresetServer();
+      return;
+    }
+    const remove = event.target?.closest?.("#deletePreset");
+    if (remove) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      deleteSelectedPresetServer();
+      return;
+    }
     if (event.target?.closest?.("#ux371ConfirmDialog [data-ux371-close]")) serverConfirmAction = null;
   }, true);
 
