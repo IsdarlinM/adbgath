@@ -18,7 +18,40 @@ After setup, every Web request requires an authenticated session.
 
 ### Remote first-run bootstrap
 
-Non-loopback Web mode still requires TLS and a startup token:
+Non-loopback Web mode always requires a startup token of at least 24 characters. TLS certificate files are optional.
+
+Secure default, with automatic TLS generation:
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token 'LONG_STARTUP_TOKEN'
+```
+
+When `--tls-cert` and `--tls-key` are omitted, ADB-Gath creates a persistent-location self-signed ECDSA P-256 server certificate and PKCS#8 private key under the server TLS directory. The certificate uses SHA-256, Server Authentication EKU and Subject Alternative Names for loopback plus locally discoverable hostnames/IP addresses.
+
+If clients connect through a specific IP address or DNS name, add it explicitly to the generated certificate:
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token 'LONG_STARTUP_TOKEN' \
+  --tls-san 192.168.1.20 \
+  --tls-san adb-lab.example.test
+```
+
+Choose the generated-material directory when required:
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token 'LONG_STARTUP_TOKEN' \
+  --tls-dir /secure/adbgath/tls
+```
+
+ADB-Gath prints the certificate path, private-key path and SHA-256 certificate fingerprint. The generated certificate is self-signed, so browsers and API clients will still show a trust warning until the operator explicitly trusts that certificate or deploys a certificate signed by a trusted CA.
+
+To use an existing certificate:
 
 ```bash
 adbgath web \
@@ -28,7 +61,20 @@ adbgath web \
   --tls-key ./server-key.pem
 ```
 
-When no Web users exist yet, the remote setup form requires that same startup token in addition to the new administrator username/password. A remote client cannot claim the first administrator without knowing the configured startup token. Failed startup-token attempts are rate-limited per client.
+ADB-Gath validates that the PEM certificate and private key exist, match each other and are inside their validity period before starting Uvicorn.
+
+Plain HTTP is available only through an explicit opt-in:
+
+```bash
+adbgath web \
+  --host 0.0.0.0 \
+  --remote-token 'LONG_STARTUP_TOKEN' \
+  --insecure-http
+```
+
+`--insecure-http` removes transport encryption. The startup token, login credentials, session cookies and assessment data can be intercepted by anyone able to observe or modify the network path. Use it only on a trusted isolated network, a local lab, or behind another trusted TLS terminator/reverse proxy. It cannot be combined with `--tls-cert`/`--tls-key`.
+
+When no Web users exist yet, the remote setup form requires the startup token in addition to the new administrator username/password. A remote client cannot claim the first administrator without knowing the configured startup token. Failed startup-token attempts are rate-limited per client.
 
 The startup token is not stored as a Web-user password and does not replace individual accounts. Once first-run setup is complete, operators authenticate with their own ADB-Gath Web usernames/passwords.
 
@@ -46,7 +92,8 @@ Local loopback first-run setup does not require the additional startup-token fie
 - The CSRF HMAC key remains server-only; browser compatibility cookies contain only a one-way derived marker.
 - Authentication setup/login forms validate same-origin `Origin`/`Referer` metadata when a browser provides it.
 - WebSocket endpoints resolve the authenticated user before binding an ADB-Gath workspace and long-lived sockets cannot outlive the authenticated session.
-- Non-loopback Web mode requires TLS and the existing remote-startup guard.
+- Non-loopback Web mode requires the remote startup token; HTTPS is the default through supplied or automatically generated TLS material.
+- Plain remote HTTP is possible only through the explicit `--insecure-http` opt-in.
 
 The server-level identity registry is independent from assessment databases. Default locations are:
 
@@ -57,7 +104,7 @@ Linux:   ${XDG_DATA_HOME:-~/.local/share}/adbgath-server
 
 Override the server registry location with `ADBGATH_SERVER_HOME` when required.
 
-On POSIX systems ADB-Gath restricts the default registry/workspace directories and secret/database files to the service account where supported.
+On POSIX systems ADB-Gath restricts the default registry/workspace directories and secret/database files to the service account where supported. Automatically generated private TLS keys are written with mode `0600` and the TLS directory with mode `0700` on POSIX systems.
 
 ## Workspaces
 
@@ -149,10 +196,11 @@ The 3.7 server registry contains user records and isolated Web workspaces. Insta
 
 For access from another host:
 
-- keep the server behind TLS;
+- prefer the automatic TLS mode or a certificate issued by your normal CA;
+- use `--insecure-http` only on a trusted isolated network or behind a trusted TLS terminator;
 - use a strong startup `--remote-token` and protect it as a bootstrap secret;
 - complete first-run setup from a trusted administrative client;
 - create individual Web accounts instead of sharing a password;
-- do not expose the service directly to the public Internet;
+- do not expose plaintext HTTP directly to the public Internet;
 - keep `ADBGATH_SERVER_HOME` on a filesystem whose OS permissions are restricted to the ADB-Gath service account;
 - back up the server registry and user workspace trees together if account/workspace continuity is required.
