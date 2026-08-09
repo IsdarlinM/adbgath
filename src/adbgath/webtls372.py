@@ -16,6 +16,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from .core.auth370 import default_server_root
+
 _DNS_RE = re.compile(
     r"^(?=.{1,253}\.?$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?$"
@@ -27,15 +29,7 @@ def _loopback(host: str) -> bool:
 
 
 def _tls_dir(explicit: str | Path | None) -> Path:
-    if explicit:
-        target = Path(explicit).expanduser().resolve()
-    else:
-        server_home = os.environ.get("ADBGATH_SERVER_HOME")
-        target = (
-            Path(server_home).expanduser().resolve() / "tls"
-            if server_home
-            else (Path.home() / ".adbgath" / "server" / "tls").resolve()
-        )
+    target = Path(explicit).expanduser().resolve() if explicit else default_server_root() / "tls"
     target.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         target.chmod(0o700)
@@ -55,6 +49,10 @@ def _san(value: str) -> x509.GeneralName:
     if address.is_unspecified:
         raise ValueError(f"Unspecified address cannot be used as a TLS SAN: {value}")
     return x509.IPAddress(address)
+
+
+def _san_key(item: x509.GeneralName) -> tuple[str, str]:
+    return type(item).__name__, str(item.value)
 
 
 def _sans(host: str, extra: Iterable[str]) -> list[x509.GeneralName]:
@@ -81,7 +79,7 @@ def _sans(host: str, extra: Iterable[str]) -> list[x509.GeneralName]:
             if value in extra:
                 raise
             continue
-        key = (type(item).__name__, str(item.value))
+        key = _san_key(item)
         if key not in seen:
             seen.add(key)
             output.append(item)
@@ -185,6 +183,37 @@ def generate_self_signed_tls(
     return cert_path, key_path, cert
 
 
+def ensure_self_signed_tls(
+    *, host: str, directory: str | Path | None = None, extra_sans: Iterable[str] = ()
+) -> tuple[Path, Path, x509.Certificate, bool]:
+    extra = tuple(str(item).strip() for item in extra_sans if str(item).strip())
+    for value in extra:
+        _san(value)
+    target = _tls_dir(directory)
+    cert_path = target / "adbgath-web-cert.pem"
+    key_path = target / "adbgath-web-key.pem"
+    if cert_path.is_file() and key_path.is_file():
+        try:
+            checked_cert, checked_key, certificate = validate_tls_pair(cert_path, key_path)
+            existing = {
+                _san_key(item)
+                for item in certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            }
+            required = {_san_key(item) for item in _sans(host, extra)}
+            remaining = certificate.not_valid_after_utc - datetime.now(timezone.utc)
+            if required <= existing and remaining > timedelta(days=30):
+                if os.name != "nt":
+                    checked_key.chmod(0o600)
+                    target.chmod(0o700)
+                return checked_cert, checked_key, certificate, False
+        except (OSError, ValueError, x509.ExtensionNotFound):
+            pass
+    cert_path, key_path, certificate = generate_self_signed_tls(
+        host=host, directory=target, extra_sans=extra
+    )
+    return cert_path, key_path, certificate, True
+
+
 def _fingerprint(certificate: x509.Certificate) -> str:
     return certificate.fingerprint(hashes.SHA256()).hex().upper()
 
@@ -217,11 +246,12 @@ def patch_webapp(module: Any) -> None:
         cert_path: Path | None = None
         key_path: Path | None = None
         certificate: x509.Certificate | None = None
+        generated = False
         try:
             if tls_cert and tls_key:
                 cert_path, key_path, certificate = validate_tls_pair(tls_cert, tls_key)
             elif not loopback and not insecure_http:
-                cert_path, key_path, certificate = generate_self_signed_tls(
+                cert_path, key_path, certificate, generated = ensure_self_signed_tls(
                     host=host, directory=tls_dir, extra_sans=tls_sans
                 )
         except (OSError, ValueError) as exc:
@@ -241,8 +271,9 @@ def patch_webapp(module: Any) -> None:
             print(f"TLS private key: {key_path}")
             print(f"TLS SHA-256 fingerprint: {_fingerprint(certificate)}")
             if not tls_cert:
+                verb = "generated" if generated else "reused"
                 print(
-                    "TLS: generated a self-signed ECDSA P-256 certificate. "
+                    f"TLS: {verb} the managed self-signed ECDSA P-256 certificate. "
                     "Clients must explicitly trust it to avoid certificate warnings."
                 )
         elif not loopback:
@@ -290,7 +321,7 @@ def patch_cli(module: Any, webapp_module: Any) -> None:
                 help="Additional DNS name or IP address for the generated certificate SAN. Repeatable.",
             )
             web._option_string_actions["--tls-cert"].help = (
-                "PEM certificate. If omitted remotely, ADBGath generates a self-signed certificate."
+                "PEM certificate. If omitted remotely, ADBGath generates/reuses a self-signed certificate."
             )
             web._option_string_actions["--tls-key"].help = "PEM private key paired with --tls-cert."
         return parser
