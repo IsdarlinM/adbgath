@@ -80,6 +80,8 @@ jobs:
               'adbgath/web/static/ux371.css',
               'adbgath/web/static/ux371.js',
               'adbgath/web/static/presets371.js',
+              'adbgath/web/static/ux372.css',
+              'adbgath/web/static/ux372.js',
               'adbgath/web/static/dashboardpairing360.js',
               'adbgath/web/static/integratedweb360.js',
               'adbgath/web/static/lab360.js',
