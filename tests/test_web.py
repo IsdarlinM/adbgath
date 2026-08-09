@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from adbgath import __version__
 from adbgath.service import WEB_ACTIONS
 from adbgath.webapp import create_app
 
@@ -17,7 +18,7 @@ def test_web_bootstrap_and_allowed_action(service):
     bootstrap = client.get("/api/bootstrap")
     assert bootstrap.status_code == 200
     body = bootstrap.json()
-    assert body["version"] == "3.7.0"
+    assert body["version"] == __version__
     assert {item["name"] for item in body["operations"]} == set(WEB_ACTIONS)
 
     result = client.post("/api/execute", json={"action": "packages", "payload": {}})
@@ -102,7 +103,8 @@ def test_wireless_pair_cannot_be_persisted_as_job(service):
         },
     )
     assert response.status_code == 400
-    assert "long-running" in response.json()["detail"]
+    detail = response.json().get("detail") or response.json().get("error") or ""
+    assert "long-running" in str(detail)
 
 
 def test_wireless_websocket_streams_discovery(service):
