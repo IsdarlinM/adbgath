@@ -1,0 +1,74 @@
+.ux372-filterbar {
+  display: grid;
+  grid-template-columns: minmax(150px, .55fr) minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+}
+
+.ux372-filterbar input,
+.ux372-filterbar select {
+  width: 100%;
+  min-width: 0;
+}
+
+.ux372-filter-count {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.ux372-artifact-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ux372-copy-path {
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.ux372-security-status {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.ux372-security-status[data-state="running"] {
+  color: var(--warning);
+}
+
+.ux372-security-status[data-state="completed"] {
+  color: var(--accent);
+}
+
+.ux372-security-status[data-state="failed"] {
+  color: var(--danger);
+}
+
+#jobList > [hidden],
+#artifactList > [hidden] {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  .ux372-filterbar {
+    grid-template-columns: 1fr;
+  }
+  .ux372-filter-count,
+  .ux372-security-status {
+    text-align: left;
+  }
+  .ux372-artifact-tools {
+    justify-content: flex-start;
+  }
+}
