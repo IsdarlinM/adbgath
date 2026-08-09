@@ -23,7 +23,27 @@ def apply() -> None:
 
     patch_cli_input_errors(cli_module)
 
+    from .core import operations as operations_module
+    from .webparity372 import patch_operations, patch_service
+
+    patch_operations(operations_module)
+
+    from . import service as service_module
+
+    service_module.WEB_ACTIONS = operations_module.WEB_ACTIONS
+    patch_service(service_module)
+
     from . import webapp as webapp_module
+
+    webapp_module.OPERATIONS = operations_module.OPERATIONS
+    webapp_module.WEB_ACTIONS = operations_module.WEB_ACTIONS
+    webapp_module.DESTRUCTIVE_ACTIONS = {
+        name for name, operation in operations_module.OPERATIONS.items() if operation.destructive
+    }
+    webapp_module.LONG_RUNNING_ACTIONS = {
+        name for name, operation in operations_module.OPERATIONS.items() if operation.long_running
+    }
+
     from .webfinal372 import patch_webapp as patch_final_web
 
     patch_final_web(webapp_module)
