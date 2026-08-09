@@ -6,14 +6,19 @@ from typing import Any
 
 
 def patch_auth_presets(module: Any) -> None:
-    """Add per-user/per-workspace preset records to the server identity database."""
+    """Add per-user/per-workspace preset records to the server identity database.
+
+    The 3.7.1 implementation incorrectly depended on a private ``_ensure_schema``
+    method that ``AuthStore`` never exposed.  Keep this compatibility layer
+    resilient by wrapping the public constructor that already initializes the
+    identity database, then create the preset schema idempotently.
+    """
     if getattr(module.AuthStore, "_adbgath_371_presets_patched", False):
         return
 
-    original_ensure_schema = module.AuthStore._ensure_schema
+    original_init = module.AuthStore.__init__
 
-    def ensure_schema(self) -> None:
-        original_ensure_schema(self)
+    def ensure_preset_schema(self) -> None:
         with self._connect() as conn:
             conn.executescript(
                 """
@@ -34,6 +39,10 @@ def patch_auth_presets(module: Any) -> None:
                     ON auth_presets(user_id, workspace_id, updated_at DESC);
                 """
             )
+
+    def init_with_presets(self, *args, **kwargs) -> None:
+        original_init(self, *args, **kwargs)
+        ensure_preset_schema(self)
 
     def _scope_exists(self, conn, user_id: str, workspace_id: str) -> bool:
         row = conn.execute(
@@ -140,7 +149,8 @@ def patch_auth_presets(module: Any) -> None:
             )
         return {"id": row["id"], "name": row["name"], "deleted": True}
 
-    module.AuthStore._ensure_schema = ensure_schema
+    module.AuthStore.__init__ = init_with_presets
+    module.AuthStore._ensure_preset_schema_371 = ensure_preset_schema
     module.AuthStore.list_presets = list_presets
     module.AuthStore.upsert_preset = upsert_preset
     module.AuthStore.delete_preset = delete_preset
