@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import adbgath
 from adbgath.cli import build_parser
 from adbgath.core.auth370 import AuthStore
+from adbgath.core.selfupdate360 import ManagedSelfUpdater
 from adbgath.errors import ValidationError
 from adbgath.selfupdatesafety372 import _candidate_preflight
 from adbgath.webapp import create_app
@@ -74,6 +75,33 @@ def test_candidate_preflight_accepts_repo_package_and_rejects_broken_candidate(t
     (package / "__init__.py").write_text("raise RuntimeError('broken-candidate-372')\n", encoding="utf-8")
     with pytest.raises(ValidationError, match="installed package was not modified"):
         _candidate_preflight(broken)
+
+
+def test_managed_update_rejects_broken_stage_before_backup(tmp_path: Path):
+    install_root = tmp_path / "managed"
+    updater = ManagedSelfUpdater(install_root)
+
+    current_site = tmp_path / "current-site"
+    current_package = current_site / "adbgath"
+    current_dist = current_site / "adbgath-3.7.1.dist-info"
+    current_package.mkdir(parents=True)
+    current_dist.mkdir(parents=True)
+    (current_package / "__init__.py").write_text("__version__='3.7.1'\n", encoding="utf-8")
+    (current_dist / "entry_points.txt").write_text("[console_scripts]\nadbgath=adbgath.cli:main\n", encoding="utf-8")
+
+    stage = tmp_path / "candidate-stage"
+    staged_package = stage / "adbgath"
+    staged_dist = stage / "adbgath-3.7.2.dist-info"
+    staged_package.mkdir(parents=True)
+    staged_dist.mkdir(parents=True)
+    (staged_package / "__init__.py").write_text("raise RuntimeError('broken-before-backup')\n", encoding="utf-8")
+    (staged_dist / "entry_points.txt").write_text("[console_scripts]\nadbgath=adbgath.cli:main\n", encoding="utf-8")
+
+    updater._installed_locations = lambda: (current_package, [current_dist])  # type: ignore[method-assign]
+    assert updater._entry_points(staged_dist).startswith("[console_scripts]")
+    with pytest.raises(ValidationError, match="installed package was not modified"):
+        updater._backup(current_package, [current_dist])
+    assert not updater.backup_root.exists()
 
 
 def test_presets_schema_and_scope_work_after_real_authstore_constructor(tmp_path: Path):
