@@ -22,3 +22,8 @@ def apply() -> None:
     from .cliguard372 import patch_cli_input_errors
 
     patch_cli_input_errors(cli_module)
+
+    from . import webapp as webapp_module
+    from .webfinal372 import patch_webapp as patch_final_web
+
+    patch_final_web(webapp_module)
