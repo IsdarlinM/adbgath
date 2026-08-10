@@ -12,6 +12,20 @@ from .models import CommandResult
 from .modules.wireless import WirelessManager
 
 
+def _integer(value: Any, *, label: str, minimum: int | None = None, maximum: int | None = None) -> int:
+    if isinstance(value, bool):
+        raise ValidationError(f"{label} must be an integer.")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValidationError(f"{label} must be an integer.") from exc
+    if minimum is not None and parsed < minimum:
+        raise ValidationError(f"{label} must be at least {minimum}.")
+    if maximum is not None and parsed > maximum:
+        raise ValidationError(f"{label} must be at most {maximum}.")
+    return parsed
+
+
 def patch_service(module: Any) -> None:
     cls = module.AdbgathService
     original_init = cls.__init__
@@ -82,16 +96,19 @@ def patch_service(module: Any) -> None:
         return self.wireless.auto_connect()
 
     def wireless_tcpip(self, serial: str | None, port: int = 5555) -> CommandResult:
+        port = _integer(port, label="Wireless TCP port", minimum=1, maximum=65535)
         return self.wireless.tcpip(self._explicit_serial(serial), port)
 
     def wireless_watch(self, *, interval: int = 3, duration: int = 0) -> Iterator[dict[str, Any]]:
+        interval = _integer(interval, label="Wireless watch interval", minimum=1, maximum=3600)
+        duration = _integer(duration, label="Wireless watch duration", minimum=0, maximum=86400)
         return self.wireless.watch(interval=interval, duration=duration)
 
     def metrics(self, mode: str = "summary", *, limit: int = 200) -> Any:
         if mode == "summary":
             return self.store.metric_summary()
         if mode == "list":
-            return self.store.list_metrics(limit)
+            return self.store.list_metrics(_integer(limit, label="Metrics limit", minimum=1, maximum=10000))
         if mode == "clear":
             return {"cleared": self.store.clear_metrics()}
         raise ValidationError(f"Unsupported metrics mode: {mode}")
@@ -152,9 +169,15 @@ def patch_service(module: Any) -> None:
         if action == "wireless_alias":
             return self.wireless_alias(str(payload.get("identifier", "")), str(payload.get("alias", "")))
         if action == "wireless_tcpip":
-            return self.wireless_tcpip(serial, int(payload.get("port", 5555))).to_dict()
+            return self.wireless_tcpip(
+                serial,
+                _integer(payload.get("port", 5555), label="Wireless TCP port", minimum=1, maximum=65535),
+            ).to_dict()
         if action == "metrics":
-            return self.metrics(str(payload.get("mode", "summary")), limit=int(payload.get("limit", 200)))
+            return self.metrics(
+                str(payload.get("mode", "summary")),
+                limit=_integer(payload.get("limit", 200), label="Metrics limit", minimum=1, maximum=10000),
+            )
         return original_dispatch(self, action, payload)
 
     cls.__init__ = initialized
