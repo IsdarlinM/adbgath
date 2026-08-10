@@ -84,17 +84,17 @@ def patch_service(module: Any) -> None:
         return original_dispatch(self, action, normalized)
 
     def plugin_sign(self, *args, **kwargs):
-        return _input_failure(module, "Plugin signing input", original_plugin_sign.__get__(self, cls), *args, **kwargs)
+        return _input_failure(module, "Plugin signing input", original_plugin_sign, self, *args, **kwargs)
 
     def plugin_verify_signed(self, *args, **kwargs):
-        return _input_failure(module, "Plugin verification input", original_plugin_verify.__get__(self, cls), *args, **kwargs)
+        return _input_failure(module, "Plugin verification input", original_plugin_verify, self, *args, **kwargs)
 
     def plugin_publisher(self, *args, **kwargs):
-        return _input_failure(module, "Plugin publisher input", original_plugin_publisher.__get__(self, cls), *args, **kwargs)
+        return _input_failure(module, "Plugin publisher input", original_plugin_publisher, self, *args, **kwargs)
 
     def plugin_verify_trusted(self, *args, **kwargs):
         try:
-            return original_plugin_verify_trusted.__get__(self, cls)(*args, **kwargs)
+            return original_plugin_verify_trusted(self, *args, **kwargs)
         except KeyError as exc:
             raise ValidationError("Unknown trusted plugin publisher.") from exc
         except module.AdbgathError:
@@ -105,19 +105,20 @@ def patch_service(module: Any) -> None:
             raise module.AdbgathError(f"Trusted plugin verification failed: {exc}") from exc
 
     def lab_pki_init(self, *args, **kwargs):
-        return _input_failure(module, "Lab CA initialization", original_lab_pki_init.__get__(self, cls), *args, **kwargs)
+        return _input_failure(module, "Lab CA initialization", original_lab_pki_init, self, *args, **kwargs)
 
     def lab_controller_certificate(self, *args, **kwargs):
         return _input_failure(
             module,
             "Lab controller certificate input",
-            original_lab_controller_certificate.__get__(self, cls),
+            original_lab_controller_certificate,
+            self,
             *args,
             **kwargs,
         )
 
     def lab_agent_enroll(self, *args, **kwargs):
-        return _input_failure(module, "Lab agent enrollment input", original_lab_agent_enroll.__get__(self, cls), *args, **kwargs)
+        return _input_failure(module, "Lab agent enrollment input", original_lab_agent_enroll, self, *args, **kwargs)
 
     cls.dispatch = dispatch
     if original_plugin_sign is not None:
