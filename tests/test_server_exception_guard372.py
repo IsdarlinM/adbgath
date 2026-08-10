@@ -9,10 +9,11 @@ from adbgath.exceptionguard372 import patch_web_server
 from adbgath.errors import AdbgathError
 
 
-def _module(*, serve=None, create_app=None):
+def _module(*, serve=None, create_app=None, main=None):
     return SimpleNamespace(
         serve=serve or (lambda **kwargs: None),
         create_app=create_app or (lambda **kwargs: object()),
+        main=main or (lambda: None),
         AdbgathError=AdbgathError,
     )
 
@@ -52,3 +53,21 @@ def test_programming_errors_remain_visible_to_outer_internal_error_boundary():
     patch_web_server(module)
     with pytest.raises(AttributeError, match="bug"):
         module.create_app()
+
+
+def test_direct_web_main_contains_expected_error(capsys):
+    module = _module(main=lambda: (_ for _ in ()).throw(AdbgathError("startup failed")))
+    patch_web_server(module)
+    assert module.main() == 2
+    captured = capsys.readouterr()
+    assert "Error: startup failed" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_direct_web_main_contains_internal_error(capsys):
+    module = _module(main=lambda: (_ for _ in ()).throw(AttributeError("bug")))
+    patch_web_server(module)
+    assert module.main() == 1
+    captured = capsys.readouterr()
+    assert "Unexpected internal error (AttributeError): bug" in captured.err
+    assert "Traceback" not in captured.err
