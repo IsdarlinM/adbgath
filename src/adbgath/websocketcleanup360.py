@@ -8,13 +8,7 @@ from fastapi import WebSocketDisconnect
 
 
 def guard_websocket_endpoint(endpoint: Callable[..., Any], *, logger=None, path: str = "websocket"):
-    """Prevent expected client disconnects from surfacing as ASGI application errors.
-
-    Browsers may close a WebSocket while navigating, refreshing, cancelling an
-    operation, sleeping, or replacing an existing connection. Starlette exposes
-    that lifecycle event as WebSocketDisconnect. It is not an application error
-    and should not produce a traceback after the client is already gone.
-    """
+    """Prevent expected client disconnects from surfacing as ASGI application errors."""
 
     @wraps(endpoint)
     async def guarded(*args, **kwargs):
@@ -51,11 +45,14 @@ def patch_webapp(module: Any) -> None:
             path = str(getattr(route, "path", "") or "")
             if not path.startswith("/ws/"):
                 continue
-            original_endpoint = route.endpoint
+            original_endpoint = getattr(route, "endpoint", None)
+            if not callable(original_endpoint):
+                continue
             guarded = guard_websocket_endpoint(original_endpoint, logger=logger, path=path)
             route.endpoint = guarded
-            if hasattr(route, "dependant"):
-                route.dependant.call = guarded
+            dependant = getattr(route, "dependant", None)
+            if dependant is not None:
+                dependant.call = guarded
 
         return app
 
