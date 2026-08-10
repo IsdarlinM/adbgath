@@ -13,6 +13,11 @@ def apply() -> None:
 
     apply_371()
 
+    from . import adb as adb_module
+    from .adbguard372 import patch_adb
+
+    patch_adb(adb_module)
+
     from .core import selfupdate360 as selfupdate_module
     from .selfupdatesafety372 import patch_self_update_safety
 
