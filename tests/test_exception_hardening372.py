@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.testclient import TestClient
 
-from adbgath import cli
+from adbgath import cli, webapp
 from adbgath.errors import ValidationError
 from adbgath.remotesetup370 import patch_webapp as patch_remote_setup
 from adbgath.webapp import create_app
@@ -68,6 +68,40 @@ def test_final_remote_app_constructs_with_static_mount(monkeypatch, tmp_path, se
     assert app.title == "adbgath Web"
     assert any(getattr(route, "path", None) == "/static" for route in app.routes)
     assert any(getattr(route, "path", None) == "/" for route in app.routes)
+
+
+@pytest.mark.parametrize("insecure_http", [False, True])
+def test_real_remote_serve_builds_full_app_without_mount_crash(monkeypatch, tmp_path, insecure_http):
+    captured = {}
+
+    def fake_run(app, **kwargs):
+        captured["app"] = app
+        captured["kwargs"] = kwargs
+
+    import uvicorn
+
+    monkeypatch.setenv("ADBGATH_SERVER_HOME", str(tmp_path / "server"))
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    webapp.serve(
+        host="0.0.0.0",
+        port=50001,
+        open_browser=False,
+        workspace=tmp_path / "workspace",
+        remote_token="r" * 24,
+        insecure_http=insecure_http,
+        tls_dir=tmp_path / "tls",
+    )
+
+    app = captured["app"]
+    assert app.title == "adbgath Web"
+    assert any(getattr(route, "path", None) == "/static" for route in app.routes)
+    if insecure_http:
+        assert captured["kwargs"]["ssl_certfile"] is None
+        assert app.state.secure_cookie is False
+    else:
+        assert captured["kwargs"]["ssl_certfile"]
+        assert captured["kwargs"]["ssl_keyfile"]
+        assert app.state.secure_cookie is True
 
 
 def test_malformed_lab_nested_payload_returns_422(service):
