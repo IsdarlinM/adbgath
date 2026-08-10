@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -7,15 +8,53 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 
-def _same_origin(request: Request, value: str) -> bool:
+def _normalize_host(hostname: str) -> str:
+    value = hostname.strip().rstrip(".").lower()
+    if not value:
+        return ""
+    try:
+        return ipaddress.ip_address(value).compressed.lower()
+    except ValueError:
+        try:
+            return value.encode("idna").decode("ascii").lower()
+        except UnicodeError:
+            return ""
+
+
+def _origin(value: str) -> tuple[str, str, int] | None:
     try:
         parsed = urlsplit(value)
-    except ValueError:
+        scheme = parsed.scheme.lower()
+        if scheme not in {"http", "https"} or parsed.username is not None or parsed.password is not None:
+            return None
+        hostname = parsed.hostname
+        port = parsed.port
+    except (TypeError, ValueError):
+        return None
+    if not hostname:
+        return None
+    host = _normalize_host(hostname)
+    if not host:
+        return None
+    if port is None:
+        port = 443 if scheme == "https" else 80
+    return scheme, host, port
+
+
+def _same_origin(request: Request, value: str) -> bool:
+    supplied = _origin(value)
+    expected = _origin(str(request.url))
+    return supplied is not None and expected is not None and supplied == expected
+
+
+def _fetch_site_decision(request: Request) -> bool | None:
+    """Use browser Fetch Metadata when available without weakening non-browser fallback checks."""
+    site = request.headers.get("sec-fetch-site", "").strip().lower()
+    if site == "same-origin":
+        return True
+    if site == "cross-site":
         return False
-    if not parsed.scheme or not parsed.netloc:
-        return False
-    expected_scheme = "https" if getattr(request.app.state, "secure_cookie", False) else "http"
-    return parsed.scheme.lower() == expected_scheme and parsed.netloc.lower() == request.headers.get("host", "").lower()
+    return None
 
 
 def patch_webapp(module: Any) -> None:
@@ -34,12 +73,29 @@ def patch_webapp(module: Any) -> None:
         @app.middleware("http")
         async def auth_form_origin_370(request: Request, call_next):
             if request.method.upper() == "POST" and request.url.path in {"/auth/setup", "/auth/login"}:
-                origin = request.headers.get("origin")
-                referer = request.headers.get("referer")
-                if origin and not _same_origin(request, origin):
-                    return JSONResponse(status_code=403, content={"ok": False, "error": "Cross-origin authentication request rejected."})
-                if not origin and referer and not _same_origin(request, referer):
-                    return JSONResponse(status_code=403, content={"ok": False, "error": "Cross-origin authentication request rejected."})
+                fetch_site = _fetch_site_decision(request)
+                if fetch_site is False:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"ok": False, "error": "Cross-origin authentication request rejected."},
+                    )
+
+                # A browser-provided same-origin Fetch Metadata signal is stronger
+                # than string-comparing Host/Origin representations and avoids false
+                # positives for equivalent IPv6/default-port/hostname forms.
+                if fetch_site is not True:
+                    origin = request.headers.get("origin")
+                    referer = request.headers.get("referer")
+                    if origin and not _same_origin(request, origin):
+                        return JSONResponse(
+                            status_code=403,
+                            content={"ok": False, "error": "Cross-origin authentication request rejected."},
+                        )
+                    if not origin and referer and not _same_origin(request, referer):
+                        return JSONResponse(
+                            status_code=403,
+                            content={"ok": False, "error": "Cross-origin authentication request rejected."},
+                        )
             return await call_next(request)
 
         return app
