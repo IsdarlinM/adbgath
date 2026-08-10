@@ -61,6 +61,10 @@ def apply() -> None:
 
     patch_final_web(webapp_module)
 
+    from .responseguard372 import patch_webapp as patch_html_response_guard
+
+    patch_html_response_guard(webapp_module)
+
     from .webtls372 import patch_cli as patch_remote_tls_cli
     from .webtls372 import patch_webapp as patch_remote_tls_webapp
 
