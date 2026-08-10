@@ -33,6 +33,10 @@ def apply() -> None:
     service_module.WEB_ACTIONS = operations_module.WEB_ACTIONS
     patch_service(service_module)
 
+    from .serviceguard372 import patch_service as patch_service_exceptions
+
+    patch_service_exceptions(service_module)
+
     from . import webapp as webapp_module
 
     webapp_module.OPERATIONS = operations_module.OPERATIONS
