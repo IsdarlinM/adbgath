@@ -42,6 +42,10 @@ def apply() -> None:
 
     patch_service_exceptions(service_module)
 
+    from .logguard372 import patch_service as patch_log_exceptions
+
+    patch_log_exceptions(service_module)
+
     from . import webapp as webapp_module
 
     webapp_module.OPERATIONS = operations_module.OPERATIONS
