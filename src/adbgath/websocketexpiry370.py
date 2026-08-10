@@ -33,7 +33,9 @@ def patch_webapp(module: Any) -> None:
             path = str(getattr(route, "path", "") or "")
             if not path.startswith("/ws/"):
                 continue
-            endpoint = route.endpoint
+            endpoint = getattr(route, "endpoint", None)
+            if not callable(endpoint):
+                continue
 
             @wraps(endpoint)
             async def expiring_endpoint(*args, _endpoint=endpoint, **kwargs):
@@ -55,7 +57,7 @@ def patch_webapp(module: Any) -> None:
                     if inspect.isawaitable(result):
                         return await asyncio.wait_for(result, timeout=remaining)
                     return result
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     with contextlib.suppress(Exception):
                         await websocket.close(code=4401)
                     return None
@@ -63,8 +65,9 @@ def patch_webapp(module: Any) -> None:
                     return None
 
             route.endpoint = expiring_endpoint
-            if hasattr(route, "dependant"):
-                route.dependant.call = expiring_endpoint
+            dependant = getattr(route, "dependant", None)
+            if dependant is not None:
+                dependant.call = expiring_endpoint
 
         return app
 

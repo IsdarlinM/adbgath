@@ -47,15 +47,22 @@ def patch_webapp(module: Any) -> None:
             secure_cookie=secure_cookie,
         )
         auth = getattr(app.state, "auth_store", None)
-        if auth is None or not app.state.remote_token:
+        if auth is None or not getattr(app.state, "remote_token", None):
             return app
 
         for route in list(app.routes):
             path = getattr(route, "path", None)
             methods = getattr(route, "methods", set()) or set()
-            original_endpoint = route.endpoint
+            is_root = path == "/" and "GET" in methods
+            is_setup = path == "/auth/setup" and "POST" in methods
+            if not (is_root or is_setup):
+                continue
 
-            if path == "/" and "GET" in methods:
+            original_endpoint = getattr(route, "endpoint", None)
+            if not callable(original_endpoint):
+                continue
+
+            if is_root:
                 async def remote_setup_root(request: Request, _original=original_endpoint):
                     result = _original(request)
                     if inspect.isawaitable(result):
@@ -65,10 +72,11 @@ def patch_webapp(module: Any) -> None:
                     return result
 
                 route.endpoint = remote_setup_root
-                if hasattr(route, "dependant"):
-                    route.dependant.call = remote_setup_root
+                dependant = getattr(route, "dependant", None)
+                if dependant is not None:
+                    dependant.call = remote_setup_root
 
-            elif path == "/auth/setup" and "POST" in methods:
+            elif is_setup:
                 async def guarded_setup(request: Request, _original=original_endpoint):
                     if auth.has_users():
                         result = _original(request)
@@ -111,8 +119,9 @@ def patch_webapp(module: Any) -> None:
                     return result
 
                 route.endpoint = guarded_setup
-                if hasattr(route, "dependant"):
-                    route.dependant.call = guarded_setup
+                dependant = getattr(route, "dependant", None)
+                if dependant is not None:
+                    dependant.call = guarded_setup
 
         return app
 

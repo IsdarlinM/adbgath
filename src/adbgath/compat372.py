@@ -13,6 +13,11 @@ def apply() -> None:
 
     apply_371()
 
+    from . import adb as adb_module
+    from .adbguard372 import patch_adb
+
+    patch_adb(adb_module)
+
     from .core import selfupdate360 as selfupdate_module
     from .selfupdatesafety372 import patch_self_update_safety
 
@@ -32,6 +37,14 @@ def apply() -> None:
 
     service_module.WEB_ACTIONS = operations_module.WEB_ACTIONS
     patch_service(service_module)
+
+    from .serviceguard372 import patch_service as patch_service_exceptions
+
+    patch_service_exceptions(service_module)
+
+    from .logguard372 import patch_service as patch_log_exceptions
+
+    patch_log_exceptions(service_module)
 
     from . import webapp as webapp_module
 
@@ -53,3 +66,7 @@ def apply() -> None:
 
     patch_remote_tls_webapp(webapp_module)
     patch_remote_tls_cli(cli_module, webapp_module)
+
+    from .exceptionguard372 import patch_web_server
+
+    patch_web_server(webapp_module)
