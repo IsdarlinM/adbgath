@@ -43,6 +43,8 @@ def _input_failure(module: Any, label: str, function, *args, **kwargs):
         raise
     except FileNotFoundError as exc:
         raise ValidationError(f"{label}: file not found: {exc.filename or exc}") from exc
+    except FileExistsError as exc:
+        raise ValidationError(f"{label}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ValidationError(f"{label}: invalid JSON: {exc.msg}.") from exc
     except (TypeError, ValueError) as exc:
