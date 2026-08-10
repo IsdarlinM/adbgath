@@ -10,6 +10,20 @@ from .errors import ValidationError
 from .modules.wireless import QrPairingCoordinator, WirelessEventBroker
 
 
+def _integer(value: Any, *, label: str, minimum: int | None = None, maximum: int | None = None) -> int:
+    if isinstance(value, bool):
+        raise ValidationError(f"{label} must be an integer.")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValidationError(f"{label} must be an integer.") from exc
+    if minimum is not None and parsed < minimum:
+        raise ValidationError(f"{label} must be at least {minimum}.")
+    if maximum is not None and parsed > maximum:
+        raise ValidationError(f"{label} must be at most {maximum}.")
+    return parsed
+
+
 def patch_service(module: Any) -> None:
     cls = module.AdbgathService
     if getattr(cls, "_adbgath_340_patched", False):
@@ -23,7 +37,8 @@ def patch_service(module: Any) -> None:
         self.qr_pairing = QrPairingCoordinator(self.wireless, workspace=self.workspace)
 
     def wireless_qr_create(self, *, ttl_seconds: int = 120, auto_connect: bool = True):
-        return self.qr_pairing.create(ttl_seconds=ttl_seconds, auto_connect=auto_connect)
+        ttl = _integer(ttl_seconds, label="QR lifetime", minimum=30, maximum=300)
+        return self.qr_pairing.create(ttl_seconds=ttl, auto_connect=bool(auto_connect))
 
     def wireless_qr_status(self, session_id: str):
         return self.qr_pairing.get(session_id)
@@ -42,6 +57,7 @@ def patch_service(module: Any) -> None:
 
     def inventory_capture(self, serial: str | None, *, name: str | None = None, user=None, keep: int = 100):
         serial = self._serial(serial)
+        keep = _integer(keep, label="Inventory retention", minimum=1, maximum=10000)
         inventory = self.inventory(serial)
         inventory["captured_at"] = datetime.now(UTC).isoformat()
         selected_user = None
@@ -57,9 +73,12 @@ def patch_service(module: Any) -> None:
         return record
 
     def inventory_list(self, serial: str | None = None, *, limit: int = 100):
+        limit = _integer(limit, label="Inventory list limit", minimum=1, maximum=10000)
         return self.store.list_inventory_states(device_serial=serial, limit=limit)
 
     def inventory_diff(self, before: str, after: str):
+        if not str(before or "").strip() or not str(after or "").strip():
+            raise ValidationError("Inventory diff requires both before and after state identifiers.")
         left = self.store.get_inventory_state(before)
         right = self.store.get_inventory_state(after)
         left_inv = left["inventory"]
@@ -92,8 +111,8 @@ def patch_service(module: Any) -> None:
 
     def inventory_watch(self, serial: str | None, *, interval: int = 10, duration: int = 0, user=None):
         serial = self._serial(serial)
-        interval = max(2, min(int(interval), 3600))
-        duration = max(0, min(int(duration), 86400))
+        interval = _integer(interval, label="Inventory watch interval", minimum=2, maximum=3600)
+        duration = _integer(duration, label="Inventory watch duration", minimum=0, maximum=86400)
         started = time.monotonic()
         previous = self.inventory_capture(serial, name="watch-baseline", user=user)
         yield {"type": "baseline", "state": {k: v for k, v in previous.items() if k != "inventory"}}
@@ -112,7 +131,7 @@ def patch_service(module: Any) -> None:
         if action == "wireless_qr_create":
             return wireless_qr_create(
                 self,
-                ttl_seconds=int(payload.get("ttl_seconds", 120)),
+                ttl_seconds=_integer(payload.get("ttl_seconds", 120), label="QR lifetime", minimum=30, maximum=300),
                 auto_connect=bool(payload.get("auto_connect", True)),
             )
         if action == "wireless_broker":
@@ -134,7 +153,11 @@ def patch_service(module: Any) -> None:
             if mode == "capture":
                 return inventory_capture(self, serial, name=payload.get("name"), user=payload.get("user"))
             if mode == "list":
-                return inventory_list(self, serial, limit=int(payload.get("limit", 100)))
+                return inventory_list(
+                    self,
+                    serial,
+                    limit=_integer(payload.get("limit", 100), label="Inventory list limit", minimum=1, maximum=10000),
+                )
             if mode == "diff":
                 return inventory_diff(self, str(payload.get("before", "")), str(payload.get("after", "")))
             raise ValidationError(f"Unsupported inventory mode: {mode}")
