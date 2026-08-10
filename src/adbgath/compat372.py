@@ -53,3 +53,7 @@ def apply() -> None:
 
     patch_remote_tls_webapp(webapp_module)
     patch_remote_tls_cli(cli_module, webapp_module)
+
+    from .exceptionguard372 import patch_web_server
+
+    patch_web_server(webapp_module)
