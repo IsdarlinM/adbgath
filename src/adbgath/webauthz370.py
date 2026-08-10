@@ -36,6 +36,15 @@ def _require_action_role(request: Request, action: str) -> None:
         raise HTTPException(status_code=403, detail=f"Administrator role required for Web operation: {action}")
 
 
+def _payload_object(body: dict[str, Any], field: str = "payload") -> dict[str, Any]:
+    value = body.get(field, {})
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=422, detail=f"{field} must be a JSON object")
+    return value
+
+
 def patch_webapp(module: Any) -> None:
     """Bind administrative Web operations to the authenticated server role."""
     if getattr(module, "_adbgath_370_web_authorization_patched", False):
@@ -50,8 +59,6 @@ def patch_webapp(module: Any) -> None:
             secure_cookie=secure_cookie,
         )
 
-        # Replace the generic execute endpoint so validation and server-role checks
-        # are both explicit and produce stable text errors for the browser.
         for route in list(app.router.routes):
             path = getattr(route, "path", None)
             methods = getattr(route, "methods", set()) or set()
@@ -85,12 +92,12 @@ def patch_webapp(module: Any) -> None:
                 result = result.to_dict()
             return {"ok": True, "data": result}
 
-        # The 3.7 jobs endpoint is already tenant-aware. Wrap its POST endpoint to
-        # apply the same server-administration role boundary before queueing work.
         for route in list(app.router.routes):
             if getattr(route, "path", None) != "/api/jobs" or "POST" not in (getattr(route, "methods", set()) or set()):
                 continue
-            original_job = route.endpoint
+            original_job = getattr(route, "endpoint", None)
+            if not callable(original_job):
+                continue
 
             async def authorized_job(request: Request, body: dict[str, Any], _original=original_job):
                 action = body.get("action") if isinstance(body, dict) else None
@@ -102,13 +109,11 @@ def patch_webapp(module: Any) -> None:
                 return result
 
             route.endpoint = authorized_job
-            if hasattr(route, "dependant"):
-                route.dependant.call = authorized_job
+            dependant = getattr(route, "dependant", None)
+            if dependant is not None:
+                dependant.call = authorized_job
             break
 
-        # Rebind the integrated Distributed Lab role claim to the authenticated
-        # Web identity. A normal Web user cannot self-assert the administrator
-        # lab role simply by modifying JSON in DevTools.
         for route in list(app.router.routes):
             path = getattr(route, "path", None)
             methods = getattr(route, "methods", set()) or set()
@@ -121,16 +126,17 @@ def patch_webapp(module: Any) -> None:
             requested_role = str(body.get("role", "operator"))
             if requested_role == "administrator" and session.role != "administrator":
                 raise HTTPException(status_code=403, detail="Administrator Web role required to request administrator Lab authority.")
+            payload = _payload_object(body)
             try:
                 result = app.state.service.lab_job_submit(
                     agent=str(body.get("agent", "")),
                     action=str(body.get("action", "")),
-                    payload=dict(body.get("payload") or {}),
+                    payload=payload,
                     role=requested_role,
                     actor=f"web:{session.username}",
                     approved=bool(body.get("approved", False)),
                 )
-            except (ValueError, KeyError, module.AdbgathError) as exc:
+            except (ValueError, KeyError, TypeError, module.AdbgathError) as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             return {"ok": True, "data": result}
 
@@ -140,12 +146,15 @@ def patch_webapp(module: Any) -> None:
             requested_role = str(body.get("role", "viewer"))
             if requested_role == "administrator" and session.role != "administrator":
                 raise HTTPException(status_code=403, detail="Administrator Web role required to evaluate administrator Lab authority.")
-            result = app.state.service.policy_operation(
-                "check",
-                role=requested_role,
-                action=str(body.get("action", "")),
-                approved=bool(body.get("approved", False)),
-            )
+            try:
+                result = app.state.service.policy_operation(
+                    "check",
+                    role=requested_role,
+                    action=str(body.get("action", "")),
+                    approved=bool(body.get("approved", False)),
+                )
+            except (ValueError, KeyError, TypeError, module.AdbgathError) as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
             return {"ok": True, "data": result}
 
         return app
